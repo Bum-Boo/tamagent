@@ -51,6 +51,7 @@ Set these during installation or in Tamagent's `/config` entries. The engine rel
 | `refreshSeconds` | number | `5` | Source polling interval, 1–3600 seconds; fractions allowed |
 | `skin` | string | `"default"` | Skin folder name; `default` always uses bundled art |
 | `characters` | string | `""` | Comma-separated `agent=characterID` pairs |
+| `language` | string | `"auto"` | Panel language. `auto` checks `LC_ALL`, `LC_MESSAGES`, `LANG`: Korean for `ko*`, English otherwise. Set `ko` or `en` to pin it |
 
 Example `options` object; change paths for your machine:
 

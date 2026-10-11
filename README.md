@@ -51,6 +51,7 @@ function hooks mod API를 지원하는 Claude Code가 필요해요. 이 저장�
 | `refreshSeconds` | 숫자 | `5` | 소스 갱신 간격, 1~3600초(소수 가능) |
 | `skin` | 문자열 | `"default"` | 스킨 폴더 이름. `default`는 항상 내장 그림 |
 | `characters` | 문자열 | `""` | 쉼표로 구분한 `에이전트=캐릭터ID` 매핑 |
+| `language` | 문자열 | `"auto"` | 화면 언어. `auto`는 `LC_ALL`·`LC_MESSAGES`·`LANG`을 보고 `ko`로 시작하면 한국어, 그 밖은 영어. `ko`·`en`으로 고정할 수 있어요 |
 
 `options` 예시예요. 명령 경로는 본인 컴퓨터에 맞게 바꿔요.
 

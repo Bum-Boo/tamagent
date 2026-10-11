@@ -5,6 +5,7 @@ export type Config = {
   refreshMs: number
   skin: string
   characters: Record<string, string>
+  language: string
   errors: string[]
 }
 
@@ -47,5 +48,10 @@ export function parseConfig(options: PluginOptions): Config {
       characters[pair[0].toLowerCase()] = pair[1]
     }
   }
-  return { sources, refreshMs: Math.round(seconds * 1000), skin, characters, errors }
+  let language = typeof options.language === 'string' ? options.language : 'auto'
+  if (!['auto', 'ko', 'en'].includes(language)) {
+    errors.push('language: use auto, ko or en; using auto')
+    language = 'auto'
+  }
+  return { sources, refreshMs: Math.round(seconds * 1000), skin, characters, language, errors }
 }

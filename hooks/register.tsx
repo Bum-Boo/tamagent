@@ -1,7 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, Timer } from 'claude-code'
 import type { Board, ToolCall } from '../types'
-import { errorText, mainAgent, parseExternal, poseOf, sections, singleLine, subagents } from './agents'
+import { EXTERNAL_GROUP, SESSION_GROUP, errorText, mainAgent, parseExternal, poseOf, sections, singleLine, subagents } from './agents'
+import type { Language } from './i18n'
+import { moreText, resolveLanguage, stringsOf, updatedText } from './i18n'
 import { parseConfig } from './config'
 import type { Look, Skin } from './sprites'
 import { HD_COLUMNS, HD_ROWS, LO_COLUMNS, LO_ROWS, frameAt, hdPicture, loCells, lookOf, parseSkin } from './sprites'
@@ -32,6 +34,7 @@ const cutCells = (text: string, room: number) => {
 }
 
 let config = parseConfig({})
+let language: Language = 'en'
 let poller: Timer | undefined
 let animator: Timer | undefined
 let skin: Skin | undefined
@@ -91,7 +94,7 @@ async function poll($: EngineInterface, token: number) {
   try {
     const [local, ...external] = await Promise.all([
       $.agent.list().then(agents => ({ entries: subagents(agents), errors: [] as string[] }),
-        (error: unknown) => ({ entries: [], errors: [`서브에이전트: ${errorText(error)}`] })),
+        (error: unknown) => ({ entries: [], errors: [`${stringsOf(language).subagents}: ${errorText(error)}`] })),
       ...config.sources.map(async (argv, index) => {
         try {
           const ran = await $.process.run(argv, { timeoutMs: 8000 })
@@ -130,6 +133,15 @@ async function animate($: EngineInterface) {
   } finally {
     animating = false
   }
+}
+
+async function detectLanguage($: EngineInterface) {
+  const locales = await Promise.all([
+    $.env.get('LC_ALL').catch(() => undefined),
+    $.env.get('LC_MESSAGES').catch(() => undefined),
+    $.env.get('LANG').catch(() => undefined),
+  ])
+  language = resolveLanguage(config.language, locales)
 }
 
 async function startPolling($: EngineInterface) {
@@ -171,16 +183,19 @@ function stopPolling() {
 export const register: Register = (on, options) => {
   config = parseConfig(options)
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'tama', description: 'Tamagent 에이전트 패널 열기' })
+    await detectLanguage($).catch(() => undefined)
+    await $.command.register({ name: 'tama', description: stringsOf(language).command })
     const panes = await $.ui.panes().catch(() => [])
     if (panes.some(pane => pane.id === PANE)) await startPolling($)
     return next(e)
   })
 
   on('command.run', { command: 'tama' }, async $ => {
+    await detectLanguage($).catch(() => undefined)
+    const text = stringsOf(language)
     const { isPlaced } = await $.ui.open({ id: PANE, title: 'Tamagent' })
     await startPolling($)
-    return { text: isPlaced ? 'Tamagent 패널을 열었어요.' : '터미널을 넓히면 Tamagent 패널이 보여요.' }
+    return { text: isPlaced ? text.opened : text.narrow }
   })
 
   on('ui.close', async ($, e, next) => {
@@ -218,22 +233,25 @@ export const register: Register = (on, options) => {
     const offset = await read($, characterOffset)
     elapsed = Math.max(0, (await $.clock.now()) - animStart)
     const width = Math.max(20, (e.viewport?.columns ?? e.props.bodyColumns) - 2)
-    const groups = sections([mainAgent(history), ...(current?.agents ?? [])], current?.external ?? [])
+    const text = stringsOf(language)
+    const titleOf = (title: string) => title === SESSION_GROUP ? text.session : title === EXTERNAL_GROUP ? text.external : title
+    const groups = sections([mainAgent(history, text), ...(current?.agents ?? [])], current?.external ?? [])
+      .map(group => ({ ...group, title: titleOf(group.title) }))
     const controls = (
       <Box flexDirection="row" gap={1}>
-        <Button key="view" label={isList ? '캐릭터로 보기' : '목록으로 보기'}
+        <Button key="view" label={isList ? text.showCharacters : text.showList}
           onPress={() => update($, isListView, value => !value)} />
-        <Button key="characters" label="캐릭터 바꾸기"
+        <Button key="characters" label={text.switchCharacters}
           onPress={() => update($, characterOffset, value => value + 1)} />
-        {offset > 0 && <Button key="reset-characters" label="기본 배정으로"
+        {offset > 0 && <Button key="reset-characters" label={text.resetCharacters}
           onPress={() => update($, characterOffset, () => 0)} />}
       </Box>
     )
     const errors = (current?.errors ?? [...config.errors, ...skinErrors]).map((error, index) => (
       <Text key={`error-${index}`} dimColor>{cutCells(`! ${error}`, width - 1)}</Text>
     ))
-    const footer = current === null ? <Text dimColor>불러오는 중…</Text> : (
-      <Text dimColor>{`${new Date(current.polledAt).toLocaleTimeString('ko-KR')} 갱신 · ${config.refreshMs / 1000}초마다`}</Text>
+    const footer = current === null ? <Text dimColor>{text.loading}</Text> : (
+      <Text dimColor>{updatedText(language, new Date(current.polledAt).toLocaleTimeString(text.locale), config.refreshMs / 1000)}</Text>
     )
     const cellWidth = useImages ? HD_COLUMNS : LO_COLUMNS
     // Very narrow panes show the list rather than clipping a 32-column raster.
@@ -290,7 +308,7 @@ export const register: Register = (on, options) => {
                   </Box>
                 ))}
               </Box>
-              {slots.length > room && <Text dimColor>{`+${slots.length - room}명 더 · 목록에서 보기`}</Text>}
+              {slots.length > room && <Text dimColor>{moreText(language, slots.length - room)}</Text>}
             </Box>
           )
         })}

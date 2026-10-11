@@ -2,6 +2,10 @@ import type { AgentInfo } from 'claude-code'
 import type { AgentEntry, AgentState, ToolCall } from '../types'
 import type { Pose } from './sprites'
 
+// 내장 그룹 ID. 외부 group 값은 singleLine으로 제어 문자가 지워지므로 이 값과 겹칠 수 없다
+export const SESSION_GROUP = '\u0000session'
+export const EXTERNAL_GROUP = '\u0000external'
+
 export const singleLine = (text: string) => text
   .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
   .replace(/[\x00-\x1f\x7f-\x9f]/g, ' ')
@@ -14,12 +18,12 @@ const POSES: Record<AgentState, Pose> = {
 }
 export const poseOf = (state: AgentState): Pose => POSES[state]
 
-export function mainAgent(calls: ToolCall[]): AgentEntry {
+export function mainAgent(calls: ToolCall[], text: { me: string; idle: string } = { me: 'Me (Claude)', idle: 'idle' }): AgentEntry {
   const active = calls.filter(call => !call.isDone)
   return {
-    id: 'me', agent: 'claude', label: '나 Claude',
-    detail: active.length ? `${active.at(-1)!.tool} (${active.length})` : 'idle',
-    state: active.length ? 'working' : 'idle', group: '이 세션', role: 'main',
+    id: 'me', agent: 'claude', label: text.me,
+    detail: active.length ? `${active.at(-1)!.tool} (${active.length})` : text.idle,
+    state: active.length ? 'working' : 'idle', group: SESSION_GROUP, role: 'main',
   }
 }
 
@@ -28,7 +32,7 @@ export const subagents = (agents: AgentInfo[]): AgentEntry[] => agents
   .map(agent => ({
     id: `agent-${encodeURIComponent(agent.id)}`, agent: singleLine(agent.type),
     label: singleLine(agent.name || agent.type), detail: singleLine(agent.description),
-    state: agent.status === 'running' ? 'working' : 'idle', group: '이 세션', role: 'subagent',
+    state: agent.status === 'running' ? 'working' : 'idle', group: SESSION_GROUP, role: 'subagent',
   }))
 
 export function parseExternal(stdout: string, source: number): { entries: AgentEntry[]; errors: string[] } {
@@ -47,7 +51,7 @@ export function parseExternal(stdout: string, source: number): { entries: AgentE
     }
     ids.add(row.id)
     const agent = singleLine(typeof row.agent === 'string' ? row.agent : '') || 'unknown'
-    const group = singleLine(typeof row.group === 'string' ? row.group : '') || '외부'
+    const group = singleLine(typeof row.group === 'string' ? row.group : '') || EXTERNAL_GROUP
     entries.push({
       id: `external-${source}-${encodeURIComponent(row.id)}`, agent,
       label: singleLine(typeof row.label === 'string' ? row.label : '') || agent,
@@ -66,5 +70,5 @@ export function sections(session: AgentEntry[], external: AgentEntry[]) {
     group.push(entry)
     groups.set(entry.group, group)
   }
-  return [{ title: '이 세션', entries: session }, ...Array.from(groups, ([title, entries]) => ({ title, entries }))]
+  return [{ title: SESSION_GROUP, entries: session }, ...Array.from(groups, ([title, entries]) => ({ title, entries }))]
 }

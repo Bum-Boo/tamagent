@@ -2,7 +2,8 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { AgentInfo, On } from 'claude-code'
 import type { AgentEntry } from '../types'
-import { mainAgent, parseExternal, poseOf, sections, subagents } from '../hooks/agents'
+import { EXTERNAL_GROUP, mainAgent, parseExternal, poseOf, sections, subagents } from '../hooks/agents'
+import { resolveLanguage } from '../hooks/i18n'
 import { parseConfig } from '../hooks/config'
 import { HD } from '../hooks/characters'
 import { frameAt, hdPicture, loCells, lookOf, parseSkin } from '../hooks/sprites'
@@ -31,12 +32,12 @@ const MANIFEST = { lo: 32, characters: {
 type HostOptions = {
   term?: string; program?: string; fail?: boolean; manifest?: string; missingFile?: boolean
   seen?: string[][]; readPaths?: string[]; agents?: AgentInfo[]; onPoll?: () => void
-  fsError?: boolean; processDelay?: number
+  fsError?: boolean; processDelay?: number; lang?: string
   process?: (argv: readonly string[]) => ReturnType<typeof result>
 }
 const host = (on: On, opts: HostOptions = {}) => {
   const clock = mock.clock(on, { now: NOW })
-  mock.env(on, { HOME: '/users/tester', TERM: opts.term ?? 'xterm-256color', TERM_PROGRAM: opts.program ?? '' })
+  mock.env(on, { HOME: '/users/tester', TERM: opts.term ?? 'xterm-256color', TERM_PROGRAM: opts.program ?? '', LANG: opts.lang ?? 'ko_KR.UTF-8' })
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('agent.list', () => { opts.onPoll?.(); return { value: opts.agents ?? AGENTS } })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
@@ -338,7 +339,7 @@ test('설정과 데이터 파싱은 잘못된 입력을 격리하고 기본값�
   const parsed = parseExternal(JSON.stringify([{ id: 'id', state: 'idle' }, { id: 'id', state: 'idle' }]), 0)
   expect(parsed.entries.length).toBe(1)
   expect(parsed.errors.length).toBe(1)
-  expect(sections([], parsed.entries)[1]?.title).toBe('외부')
+  expect(sections([], parsed.entries)[1]?.title).toBe(EXTERNAL_GROUP)
 })
 
 test('상태 다섯 개와 서브에이전트 상태를 포즈로 바꾼다', () => {
@@ -363,4 +364,30 @@ test('스킨의 포즈→idle→내장 대체와 프레임별 시간이 일치�
     const entry = { ...mainAgent([]), role }
     expect(lookOf(entry, 'idle', {}, undefined).character).toBe(character)
   }
+})
+
+test('영어 로케일이면 화면 문구가 영어다', { options: { sources: SOURCES } }, async ($, on) => {
+  host(on, { lang: 'en_US.UTF-8' })
+  const ran = await $.command.run(OPEN)
+  expect(ran.text).toBe('Opened the Tamagent panel.')
+  const pane = await mount($)
+  expect(await pane.find({ text: 'This session (4)' })).toBeDefined()
+  expect(await pane.find({ text: 'External (1)' })).toBeDefined()
+  expect(await pane.find({ type: 'Button', key: 'view' })).toBeDefined()
+  expect(JSON.stringify(await pane.find({ type: 'Button', key: 'view' }))).toContain('List')
+  await pane.press({ key: 'view' })
+  expect(await pane.find({ text: /idle Me \(Claude\)/ })).toBeDefined()
+})
+
+test('language 설정이 로케일보다 우선한다', { options: { language: 'en' } }, async ($, on) => {
+  host(on, { lang: 'ko_KR.UTF-8' })
+  expect((await $.command.run(OPEN)).text).toBe('Opened the Tamagent panel.')
+})
+
+test('로케일 판정: ko*는 한국어, 그 밖과 C/POSIX는 영어', () => {
+  expect(resolveLanguage('auto', [undefined, undefined, 'ko_KR.UTF-8'])).toBe('ko')
+  expect(resolveLanguage('auto', ['C', undefined, 'ko-KR'])).toBe('ko')
+  expect(resolveLanguage('auto', ['en_US.UTF-8', undefined, 'ko_KR.UTF-8'])).toBe('en')
+  expect(resolveLanguage('auto', [undefined, undefined, undefined])).toBe('en')
+  expect(resolveLanguage('ko', ['en_US.UTF-8'])).toBe('ko')
 })
