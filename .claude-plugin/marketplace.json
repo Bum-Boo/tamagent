@@ -1,0 +1,6 @@
+{
+  "name": "tamagent",
+  "metadata": { "description": "Tamagent agent companion for Claude Code" },
+  "owner": { "name": "Bum-Boo" },
+  "plugins": [{ "name": "tamagent", "source": "./" }]
+}
