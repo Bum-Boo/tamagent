@@ -122,6 +122,16 @@ See the [synthetic source](examples/mock-agents.py) and [ps adapter](examples/pr
 
 Download this repository or run the helper from the installed plugin directory. Importing requires Python 3 plus `ffmpeg` and `ffprobe` on PATH. Using the mod itself requires neither tool.
 
+### Finding characters
+
+A pet published in the Codex desktop pet v2 format (`pet.json` + `spritesheet.png`) imports with one command from step 1 below.
+
+- Pet catalogs such as [Pets Codex](https://petscodex.com) or [Petdex](https://petdex.crafter.run)
+- GitHub searches for `codex pet` or `codex desktop pet`; many repositories publish one ZIP per character in their releases
+- Draw your own with a pixel editor such as [Aseprite](https://www.aseprite.org) or [Piskel](https://www.piskelapp.com), export PNG frames per pose, and use step 2
+
+Many published pets are fan works of existing characters. Read each repository's terms (for example, no commercial use or redistribution) and use the art personally within those terms.
+
 ### 1. Import a Codex desktop pet v2
 
 ```sh
@@ -198,6 +208,28 @@ Manifest example (`lo` must contain 1024 values in a real frame):
 `lo` is a row-major 32×32 array; `-1` means transparent, other integers encode `0xRRGGBB`. `file` is relative to the manifest folder or an absolute path. A missing pose or unavailable file falls back to the character's `idle`, then the role's bundled character. After importing, close the panel and reopen it with `/tama` to load new files.
 
 A manifest must fit the engine's 4MiB text-read limit. The helper writes compact JSON and, if the limit would be exceeded, preserves the installed manifest and asks you to split characters into another skin.
+
+
+### Example: switch to the Chiikawa friends
+
+[chiikawa-dots-pets](https://github.com/heelee912/chiikawa-dots-pets) is an unofficial fan work that packages 11 Chiikawa characters as Codex v2 pets. The original characters belong to Nagano (ナガノ) and the other rights holders, and that repository does not allow commercial use or redistribution. Tamagent does not include this art; the commands below download it from the original releases to your computer only.
+
+```sh
+git clone https://github.com/Bum-Boo/tamagent && cd tamagent
+for c in chiikawa hachiware usagi kurimanju shisa; do
+  python3 tools/tamagent-skin.py import-codex-pet \
+    "https://github.com/heelee912/chiikawa-dots-pets/releases/download/v2.0.0/$c.zip" \
+    --skin chiikawa --as "$c"
+done
+python3 tools/tamagent-skin.py list
+```
+
+Then set Tamagent's options as follows. Other characters (Momonga, Rakko and more) import the same way.
+
+| Field | Value |
+| --- | --- |
+| `skin` | `chiikawa` |
+| `characters` | `claude=chiikawa, codex=hachiware, hermes=usagi, subagent=kurimanju, external=kurimanju, queue=shisa, unknown=kurimanju` |
 
 ## Copyright
 

@@ -122,6 +122,16 @@ print(json.dumps([
 
 저장소를 내려받거나 설치된 플러그인 폴더에서 도구를 실행해요. 가져오기는 Python 3과 PATH에 있는 `ffmpeg`, `ffprobe`만 필요해요. mod를 쓰는 것 자체에는 이 도구들이 필요하지 않아요.
 
+### 캐릭터 구하기
+
+Codex 데스크톱 펫 v2 형식(`pet.json` + `spritesheet.png`)으로 공개된 펫은 아래 1번 명령 하나로 바로 가져와요.
+
+- [Pets Codex](https://petscodex.com) 같은 펫 모음 사이트나 [Petdex](https://petdex.crafter.run)
+- GitHub에서 `codex pet` 또는 `codex desktop pet`으로 검색. 릴리스에 캐릭터별 ZIP을 올려 둔 저장소가 많아요
+- 직접 그리기: [Aseprite](https://www.aseprite.org), [Piskel](https://www.piskelapp.com) 같은 도트 도구로 포즈별 PNG를 만들어 2번 방법으로 가져와요
+
+공개된 펫은 기존 작품 캐릭터를 그린 팬 제작물이 많아요. 저장소마다 이용 조건(상업적 이용·재배포 금지 등)을 읽고 그 조건 안에서 개인적으로만 써 주세요.
+
 ### 1. Codex 데스크톱 펫 v2 가져오기
 
 ```sh
@@ -198,6 +208,28 @@ manifest 예시예요(`lo` 배열은 실제로 1024개여야 해요).
 `lo`는 행 우선 순서의 32×32 색 배열이에요. `-1`은 투명, 나머지는 `0xRRGGBB`를 정수로 적어요. `file`은 manifest 폴더 기준 상대 경로나 절대 경로예요. 빠진 포즈나 읽을 수 없는 파일은 같은 캐릭터의 `idle`, 그다음 대상 종류의 내장 캐릭터 순으로 대신해요. 스킨을 가져온 뒤 패널을 닫았다가 `/tama`로 다시 열면 새 파일을 읽어요.
 
 manifest는 엔진의 텍스트 읽기 제한인 4MiB 이내여야 해요. 도구는 compact JSON으로 저장하며 초과하면 기존 manifest를 보존하고 다른 스킨으로 나누도록 안내해요.
+
+
+### 예시: 치이카와 친구들로 바꾸기
+
+[chiikawa-dots-pets](https://github.com/heelee912/chiikawa-dots-pets)는 치이카와 캐릭터 11명을 Codex 펫 v2 형식으로 만든 비공식 팬 제작물이에요. 원작 권리는 나가노(ナガノ)와 각 권리자에게 있고 이 저장소는 상업적 이용과 재배포를 허락하지 않아요. Tamagent에는 이 그림이 들어 있지 않아요. 아래 명령은 원본 릴리스에서 내 컴퓨터로만 내려받아요.
+
+```sh
+git clone https://github.com/Bum-Boo/tamagent && cd tamagent
+for c in chiikawa hachiware usagi kurimanju shisa; do
+  python3 tools/tamagent-skin.py import-codex-pet \
+    "https://github.com/heelee912/chiikawa-dots-pets/releases/download/v2.0.0/$c.zip" \
+    --skin chiikawa --as "$c"
+done
+python3 tools/tamagent-skin.py list
+```
+
+그다음 Tamagent 설정을 이렇게 바꿔요. 다른 캐릭터(모몽가, 랏코 등)도 같은 방법으로 추가할 수 있어요.
+
+| 필드 | 값 |
+| --- | --- |
+| `skin` | `chiikawa` |
+| `characters` | `claude=chiikawa, codex=hachiware, hermes=usagi, subagent=kurimanju, external=kurimanju, queue=shisa, unknown=kurimanju` |
 
 ## 저작권
 
