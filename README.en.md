@@ -4,9 +4,8 @@
 
 Small pixel companions move while your agents work. Tamagent is a Claude Code mod that displays the main agent and its active subagents in a panel. The name combines Tamagotchi and agent. Connect other tools with scripts that print JSON.
 
-![Tamagent agent panel](docs/screenshot.png)
+![Tamagent agent panel](docs/screenshot-en.png)
 
-An actual panel screenshot will be added before release.
 
 ## Install
 

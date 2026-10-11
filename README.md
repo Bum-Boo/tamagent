@@ -6,7 +6,6 @@
 
 ![Tamagent 관제 패널](docs/screenshot.png)
 
-실제 패널 스크린샷은 배포 전에 추가할 예정이에요.
 
 ## 설치
 
