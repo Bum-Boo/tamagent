@@ -1,6 +1,6 @@
 # Tamagent
 
-[English](README.en.md)
+[한국어](README.md) · [English](README.en.md) · [日本語](README.ja.md) · [中文](README.zh.md)
 
 에이전트가 일할 때 작은 도트 캐릭터도 움직여요. Tamagent는 Claude Code의 메인 에이전트와 서브에이전트를 보여 주는 개인용 관제 패널 mod예요. 이름은 다마고치와 에이전트에서 따왔어요. 외부 도구도 JSON을 출력하는 스크립트로 연결할 수 있어요.
 

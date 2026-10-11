@@ -1,6 +1,6 @@
 # Tamagent
 
-[한국어](README.md)
+[한국어](README.md) · [English](README.en.md) · [日本語](README.ja.md) · [中文](README.zh.md)
 
 Small pixel companions move while your agents work. Tamagent is a Claude Code mod that displays the main agent and its active subagents in a panel. The name combines Tamagotchi and agent. Connect other tools with scripts that print JSON.
 
@@ -26,8 +26,8 @@ For local development, run `claude --plugin-dir /path/to/tamagent`.
 ```
 
 - The main agent works while a tool call is running and rests otherwise. Subagents work when `running`, rest when `pending`, `waiting`, or `idle`, and disappear when finished.
-- **목록으로 보기** switches to a text list. **캐릭터로 보기** switches back to characters.
-- **캐릭터 바꾸기** cycles through the current skin's characters. **기본 배정으로** restores the configured mapping. This is a session preview; it does not write settings. Panel controls currently use Korean labels.
+- **List** switches to a text list. **Characters** switches back to characters.
+- **Switch characters** cycles through the current skin's characters. **Default characters** restores the configured mapping. This is a session preview; it does not write settings. The panel text is in English or Korean (see `language`).
 - External agents are grouped by `group`. Character view shows up to two rows per section; use the list to see everyone. Closing the panel stops polling and animation.
 
 Bundled assignments:
@@ -93,7 +93,7 @@ Each command must print **one JSON array** to stdout and exit. Send diagnostic l
 | `label` | First label line; defaults to agent name |
 | `detail` | Second label line; defaults to empty |
 | `state` | Required: `working`, `idle`, `stale`, `waiting`, or `failed` |
-| `group` | Section name; omitted or empty means `외부` (“External”) |
+| `group` | Section name; omitted or empty puts the agent in the default **External** section |
 
 Newlines and control characters are normalized to one line. Extra fields are ignored. IDs are namespaced per command, so different commands can reuse an ID. Equal group names merge across commands. Failed commands or invalid JSON produce an error line while other sources remain visible. Invalid rows are skipped individually.
 
