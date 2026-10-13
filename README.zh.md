@@ -26,8 +26,9 @@
 ```
 
 - 主智能体在工具调用运行期间处于工作状态，其余时间休息。子智能体在 `running` 时工作，在 `pending`、`waiting` 或 `idle` 时休息，完成后就会消失。
+- 顶部的 **Happening now** 跨分区汇总正在动的条目（working、failed、waiting），每项一行。角色视图默认是 **Active only**：休息中的角色折叠为 `N resting`，按 **Show all** 显示全部。
 - **List** 切换为文字列表，**Characters** 切换回角色视图。
-- **Switch characters** 会在当前皮肤的角色之间轮换，**Default characters** 恢复为配置中的对应关系。这只是当前会话内的预览，不会写入设置。面板文字为英语或韩语（见 `language` 设置），中文环境下显示英语。
+- 面板文字为英语或韩语（见 `language` 设置），中文环境下显示英语。
 - `/tama cast` 切换提示框上方的解说条。`/tama voice <语音包名>` 更换本次会话的解说声音（`default` 恢复默认）。
 - 外部智能体按 `group` 分组。角色视图中每个分区最多显示两行，想看全部请切换到列表。关闭面板后会停止轮询和动画。
 

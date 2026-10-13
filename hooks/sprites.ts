@@ -48,7 +48,7 @@ export function parseSkin(text: string, directory: string): Skin {
   return { lo: LO_PIXELS, characters }
 }
 
-export function lookOf(entry: AgentEntry, pose: Pose, mapping: Record<string, string>, skin: Skin | undefined, offset = 0): Look {
+export function lookOf(entry: AgentEntry, pose: Pose, mapping: Record<string, string>, skin: Skin | undefined): Look {
   const fallback = DEFAULTS[entry.role]
   const names = skin && Object.keys(skin.characters).length ? Object.keys(skin.characters) : [...BUILTINS]
   // 에이전트 이름이 hermes:fern처럼 접두사를 가지면 정확한 이름 → 접두사 → 역할 순으로 찾는다
@@ -56,9 +56,7 @@ export function lookOf(entry: AgentEntry, pose: Pose, mapping: Record<string, st
   const prefix = agent.includes(':') ? agent.slice(0, agent.indexOf(':')) : undefined
   const mapped = mapping[agent] ?? (prefix ? mapping[prefix] : undefined) ?? mapping[entry.role]
   const wanted = mapped ?? (skin ? names[0]! : fallback)
-  const start = Math.max(0, names.indexOf(wanted))
-  const character = offset ? names[(start + offset) % names.length]! : wanted
-  return { character, fallback, pose }
+  return { character: wanted, fallback, pose }
 }
 
 const skinFrames = (look: Look, skin: Skin | undefined) => {

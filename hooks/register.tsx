@@ -17,10 +17,14 @@ const calls = atom({ plugin: 'tamagent', key: 'calls' } as const, [])
 const board = atom({ plugin: 'tamagent', key: 'board' } as const, null)
 const isListView = atom({ plugin: 'tamagent', key: 'isListView' } as const, false)
 const hasImages = atom({ plugin: 'tamagent', key: 'hasImages' } as const, false)
-const characterOffset = atom({ plugin: 'tamagent', key: 'characterOffset' } as const, 0)
 const reaction = atom({ plugin: 'tamagent', key: 'reaction' } as const, null)
 const cast = atom({ plugin: 'tamagent', key: 'cast' } as const, [])
 const isCastOn = atom({ plugin: 'tamagent', key: 'isCastOn' } as const, true)
+// 기본은 하는 일만: 쉬는 캐릭터는 수로만 보여 준다
+const isFocus = atom({ plugin: 'tamagent', key: 'isFocus' } as const, true)
+const RANK: Record<string, number> = { working: 0, failed: 1, waiting: 2, idle: 3, stale: 4 }
+const GLYPH: Record<string, string> = { working: '●', failed: '✖', waiting: '◐', idle: '○', stale: '·' }
+const isActive = (entry: AgentEntry) => entry.state !== 'idle' && entry.state !== 'stale'
 type Slot = { key: string; label: string; detail: string; state: string; look: Look; isBoss: boolean; isHit: boolean }
 
 // CJK characters take two terminal columns; combine marks take none.
@@ -46,6 +50,8 @@ let poller: Timer | undefined
 let animator: Timer | undefined
 let skin: Skin | undefined
 let skinErrors: string[] = []
+// 사용자 스킨은 읽는 동안 내장 캐릭터로 대신 그리지 않는다. 준비될 때까지 캐릭터 칸을 비워 둔다
+let isSkinReady = false
 let voiceErrors: string[] = []
 let voiceName = 'default'
 let voicesLoaded = false
@@ -114,8 +120,9 @@ async function loadVoices($: EngineInterface, name: string) {
 }
 
 async function initialize($: EngineInterface) {
-  skin = undefined
-  skinErrors = []
+  isSkinReady = false
+  const errors: string[] = []
+  let loaded: Skin | undefined
   const [term, program, kittyWindow, home, userProfile] = await Promise.all([
     $.env.get('TERM').catch(() => undefined), $.env.get('TERM_PROGRAM').catch(() => undefined),
     $.env.get('KITTY_WINDOW_ID').catch(() => undefined), $.env.get('HOME').catch(() => undefined),
@@ -123,32 +130,34 @@ async function initialize($: EngineInterface) {
   ])
   await update($, hasImages, () => term === 'xterm-kitty' || !!kittyWindow ||
     term === 'xterm-ghostty' || program?.toLowerCase() === 'ghostty')
-  if (config.skin === 'default') return
   const root = home || userProfile
-  if (!root) {
-    skinErrors.push('skin: HOME is unset; using bundled characters')
-    return
-  }
-  const directory = `${root.replace(/[\\/]$/, '')}/.local/share/tamagent/skins/${config.skin}`
-  try {
-    const manifest = parseSkin(await $.fs.read(`${directory}/manifest.json`), directory)
-    const files = new Map<string, boolean>()
-    const allFrames = Object.values(manifest.characters).flatMap(poses => Object.values(poses).flat())
-    await Promise.all([...new Set(allFrames.map(frame => frame.file))].map(async file => {
-      files.set(file, await $.fs.stat(file).then(stat => stat.kind === 'file', () => false))
-    }))
-    for (const [id, poses] of Object.entries(manifest.characters)) {
-      for (const pose of Object.keys(poses) as (keyof typeof poses)[]) {
-        poses[pose] = poses[pose]?.filter(frame => files.get(frame.file))
+  if (config.skin !== 'default' && !root) {
+    errors.push('skin: HOME is unset; using bundled characters')
+  } else if (config.skin !== 'default') {
+    const directory = `${root!.replace(/[\\/]$/, '')}/.local/share/tamagent/skins/${config.skin}`
+    try {
+      const manifest = parseSkin(await $.fs.read(`${directory}/manifest.json`), directory)
+      const files = new Map<string, boolean>()
+      const allFrames = Object.values(manifest.characters).flatMap(poses => Object.values(poses).flat())
+      await Promise.all([...new Set(allFrames.map(frame => frame.file))].map(async file => {
+        files.set(file, await $.fs.stat(file).then(stat => stat.kind === 'file', () => false))
+      }))
+      for (const [id, poses] of Object.entries(manifest.characters)) {
+        for (const pose of Object.keys(poses) as (keyof typeof poses)[]) {
+          poses[pose] = poses[pose]?.filter(frame => files.get(frame.file))
+        }
+        if (!Object.values(poses).some(frames => frames.length)) delete manifest.characters[id]
       }
-      if (!Object.values(poses).some(frames => frames.length)) delete manifest.characters[id]
+      if (!Object.keys(manifest.characters).length) throw new Error('no usable PNG frames')
+      if ([...files.values()].some(exists => !exists)) errors.push('skin: missing PNG frames; using idle or bundled characters')
+      loaded = manifest
+    } catch (error) {
+      errors.push(`skin ${config.skin}: ${errorText(error)}; using bundled characters`)
     }
-    if (!Object.keys(manifest.characters).length) throw new Error('no usable PNG frames')
-    if ([...files.values()].some(exists => !exists)) skinErrors.push('skin: missing PNG frames; using idle or bundled characters')
-    skin = manifest
-  } catch (error) {
-    skinErrors.push(`skin ${config.skin}: ${errorText(error)}; using bundled characters`)
   }
+  skin = loaded
+  skinErrors = errors
+  isSkinReady = true
 }
 
 async function poll($: EngineInterface, token: number) {
@@ -197,7 +206,7 @@ async function poll($: EngineInterface, token: number) {
 }
 
 async function animate($: EngineInterface) {
-  if (!isOpen || animating || !shown.length) return
+  if (!isOpen || animating || !shown.length || !isSkinReady) return
   animating = true
   try {
     elapsed = Math.max(0, (await $.clock.now()) - animStart)
@@ -276,6 +285,7 @@ export const register: Register = (on, options) => {
   config = parseConfig(options)
   // 플러그인이 다시 읽힐 때 지난 세션의 타이머·기준선이 남지 않게 한다
   stopPolling()
+  isSkinReady = false
   pet = new Pet(config.sleepMs, config.danger)
   caster = new Sportscaster(language, config.casters)
   arena.reset()
@@ -420,7 +430,7 @@ export const register: Register = (on, options) => {
     const current = await read($, board)
     const history = await read($, calls)
     const isList = await read($, isListView)
-    const offset = await read($, characterOffset)
+    const focus = await read($, isFocus)
     await read($, reaction)
     const now = await $.clock.now()
     elapsed = Math.max(0, now - animStart)
@@ -430,15 +440,25 @@ export const register: Register = (on, options) => {
     const bosses = (current?.bosses ?? []).map(entry => new Boss(entry))
     const groups = sections([mainAgent(history, text, pet.mood(now, moodText())), ...(current?.agents ?? [])],
       [...bossEntries(bosses, now), ...(current?.external ?? [])])
-      .map(group => ({ ...group, title: titleOf(group.title) }))
+      .map(group => ({ ...group, title: titleOf(group.title), entries: [...group.entries].sort((a, b) => (RANK[a.state] ?? 9) - (RANK[b.state] ?? 9)) }))
+    // 지금 하는 일: 섹션을 가로질러 움직이는 것만 한 줄씩
+    const activeLines = groups.flatMap(group => group.entries.filter(entry => isActive(entry) && entry.role !== 'boss')
+      .map(entry => `${GLYPH[entry.state] ?? '○'} ${group.title} · ${entry.label} · ${entry.detail}`))
+    const NOW_ROWS = 8
+    const nowBlock = (
+      <Box flexDirection="column" marginBottom={1}>
+        <Text bold>{`${text.now} (${activeLines.length})`}</Text>
+        {activeLines.length === 0 && <Text dimColor>{text.quiet}</Text>}
+        {activeLines.slice(0, NOW_ROWS).map((line, index) => <Text key={`now-${index}`}>{cutCells(line, width - 1)}</Text>)}
+        {activeLines.length > NOW_ROWS && <Text dimColor>{moreText(language, activeLines.length - NOW_ROWS)}</Text>}
+      </Box>
+    )
     const controls = (
       <Box flexDirection="row" gap={1}>
         <Button key="view" label={isList ? text.showCharacters : text.showList}
           onPress={() => update($, isListView, value => !value)} />
-        <Button key="characters" label={text.switchCharacters}
-          onPress={() => update($, characterOffset, value => value + 1)} />
-        {offset > 0 && <Button key="reset-characters" label={text.resetCharacters}
-          onPress={() => update($, characterOffset, () => 0)} />}
+        <Button key="focus" label={focus ? text.showAll : text.focus}
+          onPress={() => update($, isFocus, value => !value)} />
       </Box>
     )
     const errors = (current?.errors ?? [...config.errors, ...skinErrors, ...voiceErrors]).map((error, index) => (
@@ -447,6 +467,17 @@ export const register: Register = (on, options) => {
     const footer = current === null ? <Text dimColor>{text.loading}</Text> : (
       <Text dimColor>{updatedText(language, new Date(current.polledAt).toLocaleTimeString(text.locale), config.refreshMs / 1000)}</Text>
     )
+    if (!isSkinReady && !isList) {
+      shown = []
+      drawnFrame.clear()
+      return (
+        <Box flexDirection="column">
+          {controls}
+          {nowBlock}
+          <Text dimColor>{text.loading}</Text>
+        </Box>
+      )
+    }
     const cellWidth = useImages ? HD_COLUMNS : LO_COLUMNS
     // Very narrow panes show the list rather than clipping a 32-column raster.
     if (isList || !Raster || width < cellWidth + 2) {
@@ -455,6 +486,7 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column">
           {controls}
+          {nowBlock}
           {groups.map((group, index) => (
             <Box key={`group-${index}`} flexDirection="column" marginBottom={1}>
               <Text bold>{`${group.title} (${group.entries.length})`}</Text>
@@ -478,17 +510,24 @@ export const register: Register = (on, options) => {
     const tree = (
       <Box flexDirection="column">
         {controls}
+        {nowBlock}
         {groups.map((group, index) => {
-          const slots = group.entries.map((entry): Slot => ({
+          // 하는 일만 모드: 메인·보스는 늘 그리고, 쉬는 캐릭터는 수로만
+          const entries = focus ? group.entries.filter(entry => isActive(entry) || entry.role === 'main' || entry.role === 'boss') : group.entries
+          const resting = group.entries.length - entries.length
+          if (!entries.length) {
+            return <Text key={`group-${index}`} dimColor>{cutCells(`${group.title} · ${text.resting(resting)}`, width - 1)}</Text>
+          }
+          const slots = entries.map((entry): Slot => ({
             key: entry.id, label: entry.label, detail: entry.detail, state: entry.state,
-            look: lookOf(entry, poseOf(entry.state), config.characters, skin, offset),
+            look: lookOf(entry, poseOf(entry.state), config.characters, skin),
             isBoss: entry.role === 'boss', isHit: entry.role === 'boss' && arena.isFlashing(entry.id, now),
           }))
           const visible = slots.slice(0, room)
           drawn.push(...visible)
           return (
             <Box key={`group-${index}`} flexDirection="column" marginBottom={1}>
-              <Text bold>{`${group.title} (${slots.length})`}</Text>
+              <Text bold>{`${group.title} (${group.entries.length})`}</Text>
               <Box flexDirection="row" flexWrap="wrap">
                 {visible.map(slot => (
                   <Box key={`slot-${slot.key}`} flexDirection="column" width={slot.isBoss ? bossWidth : slotWidth}>
@@ -508,6 +547,7 @@ export const register: Register = (on, options) => {
                 ))}
               </Box>
               {slots.length > room && <Text dimColor>{moreText(language, slots.length - room)}</Text>}
+              {resting > 0 && <Text dimColor>{text.resting(resting)}</Text>}
             </Box>
           )
         })}

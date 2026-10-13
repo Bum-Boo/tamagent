@@ -15,9 +15,10 @@ const PACK = { voices: ['하치와레', '우사기', '치이카와'], lines: {
   error: [[1, '하?! {tool} 실패?! 이야아아!'], [9, 'ignored'], ['x', 'ignored']],
   bogus: [[0, 'ignored']],
 } }
+const SKIN = { lo: 32, characters: { hero: { idle: [{ file: 'hero/idle-0.png', ms: 150, lo: Array(1024).fill(0x123456) }] } } }
 const BOSS = { id: 'xr', label: 'XR 수업', detail: '5분 영상', due: NOW + 2 * DAY, since: NOW - 12 * DAY, hits: 3 }
 
-type HostOptions = { rows?: () => unknown[]; lang?: string; toasts?: string[]; term?: string }
+type HostOptions = { rows?: () => unknown[]; lang?: string; toasts?: string[]; term?: string; manifestDelay?: number }
 const host = (on: On, opts: HostOptions = {}) => {
   const clock = mock.clock(on, { now: NOW })
   mock.env(on, { HOME: '/users/tester', TERM: opts.term ?? 'xterm-256color', TERM_PROGRAM: '', LANG: opts.lang ?? 'ko_KR.UTF-8' })
@@ -27,8 +28,15 @@ const host = (on: On, opts: HostOptions = {}) => {
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   on('ui.panes', () => ({ value: [] }))
   on('process.run', () => ({ value: result(JSON.stringify(opts.rows ? opts.rows() : [])) }))
-  on('fs.read', (_$, e) => e.path === '/users/tester/.local/share/tamagent/voices/test.json'
-    ? { value: JSON.stringify(PACK) } : { deny: 'ENOENT: no such file' })
+  on('fs.read', async (_$, e) => {
+    if (e.path === '/users/tester/.local/share/tamagent/voices/test.json') return { value: JSON.stringify(PACK) }
+    if (e.path.endsWith('/skins/slow/manifest.json')) {
+      if (opts.manifestDelay) await clock.sleep(opts.manifestDelay)
+      return { value: JSON.stringify(SKIN) }
+    }
+    return { deny: 'ENOENT: no such file' }
+  })
+  on('fs.stat', () => ({ value: { kind: 'file', size: 128, mtimeMs: NOW, isLink: false } }))
   on('prompt.submit', () => ({ text: '' }))
   // 띠에 보여 줄 게 없으면 엔진 자리를 돌려준다
   on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'engine', ref: 0 }))
@@ -134,14 +142,18 @@ test('/tama cast 로 중계를 끄면 띠가 사라지고 다시 켜면 돌아�
   expect(await band.find({ text: '하치와레' })).toBeUndefined()
 })
 
-test('조용하면 잠들고 프롬프트가 오면 깨며 턴이 끝나면 중계한다', { options: { sleepMinutes: 1 } }, async ($, on) => {
+// 65초를 돌리면 애니메이션 타이머가 650번 깨어나서 부하가 큰 기계에선 5초를 넘긴다
+test('조용하면 잠들고 프롬프트가 오면 깨며 턴이 끝나면 중계한다', { options: { sleepMinutes: 1 }, timeoutMs: 30_000 }, async ($, on) => {
   const clock = host(on, { term: 'xterm-kitty' })
   on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false } }))
   await $.command.run(OPEN)
   const pane = await mountPane($)
   const band = await mountBand($)
   await $.tool.call({ tool: 'Read', file_path: '/a' })
+  // 65초 동안 애니메이션 650프레임을 그리지 않도록 목록 보기로 기다린다
+  await pane.press({ key: 'view' })
   await clock.advance(65_000)
+  await pane.press({ key: 'view' })
   expect(await alt(pane, 'me')).toBe('slime sleep')
   expect(await pane.find({ text: /zZ/ })).toBeDefined()
   expect(await band.find({ text: /잠들었습니다|꿈나라/ })).toBeDefined()
@@ -318,4 +330,51 @@ test('lookOf: hermes:fern 같은 이름은 정확한 이름 → 접두사 → �
   expect(lookOf(entry('Hermes:Stark'), 'idle', mapping, undefined).character).toBe('usagi')
   expect(lookOf(entry('codex'), 'idle', mapping, undefined).character).toBe('kurimanju')
   expect(lookOf(entry('codex'), 'idle', {}, undefined).character).toBe('mushroom')
+})
+
+test('사용자 스킨을 읽는 동안에는 내장 캐릭터를 잠깐이라도 그리지 않는다', { options: { skin: 'slow' } }, async ($, on) => {
+  const clock = host(on, { manifestDelay: 3000 })
+  const opening = $.command.run(OPEN)
+  await clock.settle()
+  const pane = await mountPane($)
+  expect(await pane.find({ type: 'Raster' })).toBeUndefined()
+  expect(await pane.find({ text: '불러오는 중…' })).toBeDefined()
+  await clock.advance(3000)
+  await opening
+  const raster = await pane.find({ type: 'Raster', key: 'me' })
+  expect(raster).toBeDefined()
+  // 스킨 프레임 색 0x123456(LE 바이트 56 34 12 00)으로 그려졌는지. 내장 slime 팔레트에는 없는 색
+  const bytes = atob(String(raster?.props.cells))
+  expect(bytes.includes(String.fromCharCode(0x56, 0x34, 0x12, 0x00))).toBe(true)
+})
+
+test('지금 하는 일 요약과 하는 일만 모드: 쉬는 캐릭터는 수로만, 모두 보기로 전부', SOURCE, async ($, on) => {
+  host(on, { rows: () => [
+    { id: 'w', agent: 'codex', label: 'Codex', detail: 'parser.py', state: 'working', group: '프로젝트' },
+    { id: 'f', agent: 'gemini', label: 'Gemini', detail: '검토 실패', state: 'failed', group: '프로젝트' },
+    { id: 'i1', agent: 'hermes', label: 'fern', detail: 'gateway', state: 'idle', group: '힘멜' },
+    { id: 'i2', agent: 'hermes', label: 'stark', detail: 'gateway', state: 'stale', group: '힘멜' },
+  ] })
+  await $.command.run(OPEN)
+  const pane = await mountPane($)
+  expect(await pane.find({ text: '지금 하는 일 (2)' })).toBeDefined()
+  expect(await pane.find({ text: '● 프로젝트 · Codex · parser.py' })).toBeDefined()
+  expect(await pane.find({ text: '✖ 프로젝트 · Gemini · 검토 실패' })).toBeDefined()
+  expect(await pane.find({ type: 'Raster', key: 'external-0-w' })).toBeDefined()
+  expect(await pane.find({ type: 'Raster', key: 'external-0-i1' })).toBeUndefined()
+  expect(await pane.find({ text: '힘멜 · 쉬는 중 2' })).toBeDefined()
+  expect(await pane.find({ type: 'Raster', key: 'me' })).toBeDefined()
+  await pane.press({ key: 'focus' })
+  expect(await pane.find({ type: 'Raster', key: 'external-0-i1' })).toBeDefined()
+  expect(await pane.find({ text: '힘멜 (2)' })).toBeDefined()
+  await pane.press({ key: 'view' })
+  expect(await pane.find({ text: '지금 하는 일 (2)' })).toBeDefined()
+  expect(await pane.find({ text: /stale stark/ })).toBeDefined()
+})
+
+test('아무것도 안 하면 조용하다고 알린다', async ($, on) => {
+  host(on)
+  await $.command.run(OPEN)
+  const pane = await mountPane($)
+  expect(await pane.find({ text: '지금은 조용해요.' })).toBeDefined()
 })

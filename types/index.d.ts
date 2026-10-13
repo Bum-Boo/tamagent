@@ -36,10 +36,10 @@ declare module 'claude-code' {
       board: Board | null
       isListView: boolean
       hasImages: boolean
-      characterOffset: number
       reaction: ReactionEntry | null
       cast: CastEntry[]
       isCastOn: boolean
+      isFocus: boolean
     }
   }
 }

@@ -65,8 +65,13 @@ const PANE_PROPS = {
 const OPEN = {
   command: 'tama', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 160 },
 } as const
-const mount = ($: Engine, surface: 'terminal' | 'desktop' = 'terminal', columns = 120) =>
-  $.ui.mount({ plugin: 'tamagent', surface, component: 'Pane', props: { ...PANE_PROPS, bodyColumns: columns }, requestId: 'tamagent-panel' })
+// 이 파일의 테스트는 모두 보기 기준으로 쓰였다. 기본 '하는 일만'이면 모두 보기로 바꾼다
+const mount = async ($: Engine, surface: 'terminal' | 'desktop' = 'terminal', columns = 120) => {
+  const pane = await $.ui.mount({ plugin: 'tamagent', surface, component: 'Pane', props: { ...PANE_PROPS, bodyColumns: columns }, requestId: 'tamagent-panel' })
+  const focus = await pane.find({ type: 'Button', key: 'focus' })
+  if (focus && (focus.props.label === '모두 보기' || focus.props.label === 'Show all')) await pane.press({ key: 'focus' })
+  return pane
+}
 const imageSource = async (pane: Awaited<ReturnType<typeof mount>>, key: string) =>
   (await pane.find({ type: 'Image', key }))?.props.source
 
@@ -218,16 +223,6 @@ test('외부 상태 다섯 개와 queue·unknown 기본 배정을 화면에도 �
   for (const [index, alt] of expected.entries()) {
     expect((await pane.find({ type: 'Image', key: `external-0-${index}` }))?.props.alt).toBe(alt)
   }
-})
-
-test('캐릭터 바꾸기와 기본 배정 복귀', async ($, on) => {
-  host(on, { term: 'xterm-kitty' })
-  await $.command.run(OPEN)
-  const pane = await mount($)
-  await pane.press({ key: 'characters' })
-  expect(await imageSource(pane, 'me')).toEqual({ png: HD['robot-idle-0'] })
-  await pane.press({ key: 'reset-characters' })
-  expect(await imageSource(pane, 'me')).toEqual({ png: HD['slime-idle-0'] })
 })
 
 test('메인은 도구가 실행 중일 때만 working이고 실패한 호출은 잠깐 아팠다가 idle로 돌아간다', async ($, on) => {

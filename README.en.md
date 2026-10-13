@@ -26,8 +26,9 @@ For local development, run `claude --plugin-dir /path/to/tamagent`.
 ```
 
 - The main agent works while a tool call is running and rests otherwise. Subagents work when `running`, rest when `pending`, `waiting`, or `idle`, and disappear when finished.
+- **Happening now** at the top lists everything in motion (working, failed, waiting) across sections, one line each. Character view defaults to **Active only**: resting characters collapse to `N resting`; **Show all** draws everyone.
 - **List** switches to a text list. **Characters** switches back to characters.
-- **Switch characters** cycles through the current skin's characters. **Default characters** restores the configured mapping. This is a session preview; it does not write settings. The panel text is in English or Korean (see `language`).
+- The panel text is in English or Korean (see `language`).
 - External agents are grouped by `group`. Character view shows up to two rows per section; use the list to see everyone. Closing the panel stops polling and animation.
 - `/tama cast` toggles the commentary band above the prompt. `/tama voice <pack>` switches the commentary voices for this session (`default` restores them).
 
