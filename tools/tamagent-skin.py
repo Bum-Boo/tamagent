@@ -193,6 +193,90 @@ def import_frames(args, temporary, frames_dir):
     return poses
 
 
+def parse_cells(text):
+    """idle=0,work=1,idle=2,sleep=3,wait=4,alert=5 → {pose: [cell indexes in order]}"""
+    cells = {}
+    for item in text.split(','):
+        item = item.strip()
+        if not item:
+            continue
+        pose, _, index = item.partition('=')
+        pose = pose.strip()
+        if pose not in ('work', 'idle', 'sleep', 'wait', 'alert') or not index.strip().isdigit():
+            raise ValueError(f'--cells entry {item!r}: use pose=cell with pose in work/idle/sleep/wait/alert')
+        cells.setdefault(pose, []).append(int(index))
+    if not cells:
+        raise ValueError('--cells needs at least one pose=cell entry')
+    return cells
+
+
+def alpha_box(rgba, width, height):
+    """Bounding box of nontransparent pixels, or None."""
+    left, top, right, bottom = width, height, -1, -1
+    alpha = rgba[3::4]
+    for y in range(height):
+        row = alpha[y * width:(y + 1) * width]
+        if not any(row):
+            continue
+        top = min(top, y)
+        bottom = y
+        first = next(i for i, a in enumerate(row) if a)
+        last = len(row) - 1 - next(i for i, a in enumerate(reversed(row)) if a)
+        left, right = min(left, first), max(right, last)
+    return None if bottom < 0 else (left, top, right + 1, bottom + 1)
+
+
+def import_sheet(args, temporary, frames_dir):
+    """Slice a columns×rows sprite sheet into pose frames. Cells are numbered row-major from 0."""
+    sheet = Path(args.source).expanduser().resolve()
+    if not sheet.is_file():
+        raise ValueError('Sheet source must be a PNG file')
+    columns, rows = args.columns, args.rows
+    if columns < 1 or rows < 1:
+        raise ValueError('--columns and --rows must be at least 1')
+    width, height = dimensions(sheet)
+    if width % columns or height % rows:
+        raise ValueError(f'Sheet {width}x{height} does not divide into {columns}x{rows} equal cells')
+    cell_w, cell_h = width // columns, height // rows
+    wanted = parse_cells(args.cells)
+    poses = {}
+    for pose, indexes in wanted.items():
+        frames = []
+        for index in indexes:
+            if index >= columns * rows:
+                raise ValueError(f'cell {index} is outside a {columns}x{rows} sheet')
+            row, column = divmod(index, columns)
+            crop = f'crop={cell_w}:{cell_h}:{column * cell_w}:{row * cell_h}'
+            if args.trim:
+                raw = run('ffmpeg', '-v', 'error', '-threads', '1', '-i', str(sheet), '-filter_threads', '1',
+                          '-vf', crop, '-frames:v', '1', '-threads', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', '-')
+                box = alpha_box(raw, cell_w, cell_h)
+                if box is None:
+                    print(f'{pose}: cell {index} is empty; skipped', file=sys.stderr)
+                    continue
+                left, top, right, bottom = box
+                # 여백을 조금 남긴 정사각형으로 자른다. 칸 밖으로는 안 나간다
+                side = min(max(right - left, bottom - top) + 2 * args.margin, cell_w, cell_h)
+                cx, cy = (left + right) // 2, (top + bottom) // 2
+                x = min(max(0, cx - side // 2), cell_w - side)
+                y = min(max(0, cy - side // 2), cell_h - side)
+                crop = f'{crop},crop={side}:{side}:{x}:{y}'
+                filters = crop
+            else:
+                filters = f'{crop},pad={max(cell_w, cell_h)}:{max(cell_w, cell_h)}:(ow-iw)/2:(oh-ih)/2:color=0x00000000'
+            small = convert(sheet, f'{filters},scale={LO}:{LO}:flags=area')
+            if not any(small[3::4]):
+                print(f'{pose}: cell {index} is empty; skipped', file=sys.stderr)
+                continue
+            filename = f'{pose}-{len(frames)}.png'
+            convert(sheet, filters, frames_dir / filename)
+            frames.append({'file': filename, 'lo': colors(small), 'ms': args.ms})
+        if frames:
+            poses[pose] = frames
+        print(f'{pose}: {len(frames)} frames')
+    return poses
+
+
 def install(args):
     for name in (args.skin, args.character):
         if not NAME.fullmatch(name):
@@ -213,7 +297,8 @@ def install(args):
         temporary = Path(temp)
         frames_dir = temporary / 'frames'
         frames_dir.mkdir()
-        poses = import_codex(args, temporary, frames_dir) if args.command == 'import-codex-pet' else import_frames(args, temporary, frames_dir)
+        importer = {'import-codex-pet': import_codex, 'import-frames': import_frames, 'import-sheet': import_sheet}[args.command]
+        poses = importer(args, temporary, frames_dir)
         if not any(poses.values()):
             raise ValueError('No nonempty frames found; existing manifest has not been changed')
         relative = Path('frames') / f'{args.character}-{uuid.uuid4().hex[:12]}'
@@ -246,14 +331,20 @@ def list_skins():
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
-    for name in ('import-codex-pet', 'import-frames'):
+    for name in ('import-codex-pet', 'import-frames', 'import-sheet'):
         sub = commands.add_parser(name)
-        sub.add_argument('source', help='folder, ZIP, or ZIP URL' if name == 'import-codex-pet' else 'frame folder')
+        sub.add_argument('source', help={'import-codex-pet': 'folder, ZIP, or ZIP URL', 'import-frames': 'frame folder', 'import-sheet': 'sprite sheet PNG'}[name])
         sub.add_argument('--skin', required=True)
         sub.add_argument('--as', dest='character', required=True)
         sub.add_argument('--ms', type=int, default=150, help='default frame duration in ms (150)')
         if name == 'import-codex-pet':
             sub.add_argument('--gif-dir', help='optional local GIF folder for per-frame durations')
+        if name == 'import-sheet':
+            sub.add_argument('--columns', type=int, required=True, help='cells per row')
+            sub.add_argument('--rows', type=int, required=True, help='cell rows')
+            sub.add_argument('--cells', required=True, help='pose=cell list, row-major from 0, e.g. idle=0,work=1,idle=2,sleep=3,wait=4,alert=5')
+            sub.add_argument('--trim', action='store_true', help='crop each cell to its drawn pixels so small sprites fill the frame')
+            sub.add_argument('--margin', type=int, default=4, help='pixels kept around the sprite with --trim (4)')
     commands.add_parser('list')
     args = parser.parse_args(argv)
     try:

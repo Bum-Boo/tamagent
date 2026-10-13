@@ -29,6 +29,7 @@ function hooks mod API를 지원하는 Claude Code가 필요해요. 이 저장�
 - **목록으로 보기**를 누르면 상태와 이름표를 글로 봐요. **캐릭터로 보기**로 돌아올 수 있어요.
 - **캐릭터 바꾸기**는 현재 스킨의 캐릭터를 순서대로 바꿔 봐요. **기본 배정으로**를 누르면 설정의 매핑으로 돌아와요. 이 선택은 현재 세션의 미리보기이며 설정 파일에 저장하지 않아요.
 - 외부 에이전트는 `group`별로 묶어요. 캐릭터 화면은 섹션마다 두 줄까지만 그리고 나머지 인원은 목록에서 봐요. 패널을 닫으면 갱신과 애니메이션도 멈춰요.
+- `/tama cast`는 입력창 위 중계 띠를 켜고 꺼요. `/tama voice <팩 이름>`은 이 세션의 중계 목소리를 바꿔요(`default`로 복귀).
 
 내장 캐릭터의 기본 배정이에요.
 
@@ -39,6 +40,59 @@ function hooks mod API를 지원하는 Claude Code가 필요해요. 이 저장�
 | 외부 에이전트 | `mushroom` | 보라 버섯 |
 | `group`에 `queue` 포함(대소문자 무관) | `cloud` | 복숭아색 구름 |
 | 에이전트 이름이 비어 있거나 `unknown`, `?` | `meteor` | 꼬리가 있는 금빛 유성 |
+
+## 펫의 반응
+
+메인 캐릭터는 세션에서 일어나는 일에 반응해요. 아무것도 막거나 바꾸지 않고 보여 주기만 해요.
+
+| 일어난 일 | 반응 | 지속 |
+| --- | --- | --- |
+| 도구 호출이 오류로 끝남 | `alert` 포즈, 이름표에 `앗, 실패! <도구>` | 6초 |
+| 다른 플러그인이 호출을 막음 | `alert` 포즈, `차단됨 <도구>` | 6초 |
+| 위험해 보이는 Bash 명령 | `alert` 포즈, `위험 명령!`, 토스트 한 번 | 8초 |
+| 턴이 답으로 끝남 | `완료!` | 4초 |
+| `sleepMinutes` 동안 조용함 | `sleep` 포즈, `zZ` | 다음 프롬프트·도구 호출까지 |
+
+위험 명령은 `rm -rf`, `git push --force`, `git reset --hard`, `DROP TABLE`, `dd if=`, `mkfs` 같은 되돌리기 어려운 명령 패턴이에요. `danger` 설정에 정규식을 더할 수 있어요. 호출은 그대로 실행돼요. 막고 싶으면 가드 mod를 따로 쓰세요.
+
+## 마감 보스전
+
+외부 소스 행에 `due`가 있으면 그 행은 보스예요. 남은 시간이 체력이고, `hits`가 늘어날 때마다 한 대 때린 거예요.
+
+```json
+[
+  {"id": "paper", "label": "논문 제출", "detail": "초록 수정",
+   "due": "2026-12-01", "since": "2026-11-17", "hits": 12, "group": "마감"}
+]
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `id`, `label` | 필수 |
+| `due` | 필수. ISO 날짜·시각 또는 밀리초. 날짜만 적으면 그날 23:59:59(현지) |
+| `since` | 체력이 100%인 시점. 생략하면 `due` 14일 전 |
+| `hits` | 0 이상 정수. 갱신 사이에 늘면 `HIT!`가 3초 번쩍이고 중계가 나와요 |
+| `detail`, `group` | 생략 가능. `group` 기본값은 `보스전` |
+
+보스 칸에는 `██████░░░░ 62% · 8일 3시간 · 12히트` 같은 체력 줄이 붙어요. 24시간 안이면 분노 모드(`alert` 포즈, 토스트 한 번), 마감이 지나면 `마감 지남`이에요. 보스 캐릭터는 `characters`의 `boss` 키로 정하고, 기본은 `meteor`예요.
+
+## 중계석
+
+입력창 위 띠에 두 목소리가 세션을 중계해요. 턴의 첫 도구, 같은 도구 5·10·20·40연타, 실패, 위험 명령, 턴 종료, 서브에이전트 투입, 외부 에이전트 입장과 상태 변화, 보스 히트·분노, 펫의 잠과 기상을 알려요. 급한 일이 아니면 2.5초에 한 줄까지만 말하고, 같은 말은 반복하지 않아요. 띠의 **중계 끄기** 버튼이나 `/tama cast`로 끄고 켜요.
+
+목소리 팩으로 말투를 바꿀 수 있어요. `~/.local/share/tamagent/voices/<이름>.json`에 두고 `voices` 설정이나 `/tama voice <이름>`으로 골라요.
+
+```json
+{
+  "voices": ["캐스터", "해설", "신인"],
+  "lines": {
+    "start": [[0, "{tool}로 턴을 엽니다."], [2, "{tool}… 저도 해 볼게요!"]],
+    "hit": [[1, "{label}에 {hits}히트!"]]
+  }
+}
+```
+
+`voices`는 1~6명이고, 각 줄은 `[목소리 번호, 문구]`예요. 문구의 `{tool}`, `{count}`, `{seconds}`, `{tools}`, `{description}`, `{agent}`, `{detail}`, `{label}`, `{hits}`가 실제 값으로 바뀌어요. 종류는 `start`, `burst`, `error`, `danger`, `denied`, `turn`, `spawn`, `enter`, `failed`, `waiting`, `hit`, `rage`, `past`, `sleep`, `wake`이고, 빠진 종류는 내장 문구를 써요. 좋아하는 작품의 등장인물 말투로 팩을 만들어 개인 폴더에 두면 돼요. 이름과 문구가 남의 저작물이면 저장소에 넣지 말고 개인 설정으로만 쓰세요.
 
 ## 설정
 
@@ -51,6 +105,11 @@ function hooks mod API를 지원하는 Claude Code가 필요해요. 이 저장�
 | `skin` | 문자열 | `"default"` | 스킨 폴더 이름. `default`는 항상 내장 그림 |
 | `characters` | 문자열 | `""` | 쉼표로 구분한 `에이전트=캐릭터ID` 매핑 |
 | `language` | 문자열 | `"auto"` | 화면 언어. `auto`는 `LC_ALL`·`LC_MESSAGES`·`LANG`을 보고 `ko`로 시작하면 한국어, 그 밖은 영어. `ko`·`en`으로 고정할 수 있어요 |
+| `danger` | 문자열 | `""` | 내장 위험 명령 목록에 더할 정규식. 펫이 놀라기만 하고 아무것도 막지 않아요 |
+| `sportscaster` | 문자열 | `"on"` | 입력창 위 중계 띠. `off`면 숨기고 `/tama cast`로 켤 수 있어요 |
+| `casters` | 문자열 | `""` | 쉼표로 구분한 중계 이름. 앞에서부터 목소리 팩의 이름을 덮어써요 |
+| `voices` | 문자열 | `"default"` | 목소리 팩 이름. `~/.local/share/tamagent/voices/<이름>.json`을 읽어요 |
+| `sleepMinutes` | 숫자 | `10` | 도구 호출도 프롬프트도 없이 이만큼 지나면 펫이 잠들어요, 1~1440분 |
 
 `options` 예시예요. 명령 경로는 본인 컴퓨터에 맞게 바꿔요.
 
@@ -59,13 +118,15 @@ function hooks mod API를 지원하는 Claude Code가 필요해요. 이 저장�
   "sources": "[[\"python3\",\"/path/to/tamagent/examples/mock-agents.py\"],[\"python3\",\"/path/to/tamagent/examples/process-agents.py\"]]",
   "refreshSeconds": 5,
   "skin": "default",
-  "characters": "claude=slime, codex=robot"
+  "characters": "claude=slime, codex=robot, boss=meteor",
+  "casters": "캐스터, 해설",
+  "sleepMinutes": 10
 }
 ```
 
 `sources` 설정 칸에 직접 입력할 때는 `[["python3","/path/to/agents.py"]]`처럼 쓰면 돼요. 명령은 셸 없이 실행해요. 공백이 있는 경로도 하나의 인자로 전달돼요. `~`, `$HOME`, 파이프, 리다이렉션은 자동으로 해석하지 않으니 절대 경로나 PATH의 실행 파일을 써요. 명령의 작업 폴더는 현재 Claude Code 세션의 폴더예요. 설정한 명령은 패널이 열린 동안 반복 실행되므로 본인이 신뢰하는 읽기 전용 스크립트를 연결해요.
 
-매핑은 대소문자를 구분하지 않는 에이전트 이름으로 찾아요. 메인은 `claude`, 서브는 타입 이름(예: `Explore`), 외부는 JSON의 `agent`예요. `main`, `subagent`, `external`, `queue`, `unknown` 키를 쓰면 대상 종류 전체에 적용해요. 에이전트 이름 매핑이 종류 매핑보다 우선해요. 사용자 스킨에서 매핑 없는 에이전트는 manifest에 처음 등록된 캐릭터를 써요. 없는 ID는 해당 대상의 내장 캐릭터로 대신해요.
+매핑은 대소문자를 구분하지 않는 에이전트 이름으로 찾아요. 에이전트 이름에 `hermes:fern`처럼 콜론이 있으면 정확한 이름 → 콜론 앞 접두사(`hermes`) → 종류 순으로 찾아요. 외부 소스가 한 종류의 에이전트를 여러 개체로 나눠 보낼 때 개체마다 다른 캐릭터를 줄 수 있어요. 메인은 `claude`, 서브는 타입 이름(예: `Explore`), 외부는 JSON의 `agent`예요. `main`, `subagent`, `external`, `queue`, `unknown` 키를 쓰면 대상 종류 전체에 적용해요. 에이전트 이름 매핑이 종류 매핑보다 우선해요. 사용자 스킨에서 매핑 없는 에이전트는 manifest에 처음 등록된 캐릭터를 써요. 없는 ID는 해당 대상의 내장 캐릭터로 대신해요.
 
 스킨 이름과 캐릭터 ID는 영문·숫자로 시작하고 영문, 숫자, `_`, `-`를 써요(최대 64자). 잘못된 설정은 패널에 오류를 표시하고 기본값 또는 유효한 항목으로 계속해요.
 
@@ -94,6 +155,7 @@ function hooks mod API를 지원하는 Claude Code가 필요해요. 이 저장�
 | `detail` | 이름표 둘째 줄. 생략하면 빈 문자열 |
 | `state` | 필수. `working`, `idle`, `stale`, `waiting`, `failed` 중 하나 |
 | `group` | 섹션 이름. 생략·빈 문자열이면 `외부` |
+| `due` | 있으면 이 행은 에이전트가 아니라 **마감 보스**예요. 위 마감 보스전 절을 봐요 |
 
 문자열 필드의 줄바꿈과 제어 문자는 한 줄에 맞춰 정리해요. 알 수 없는 추가 필드는 무시해요. 서로 다른 명령은 같은 ID를 써도 충돌하지 않아요. 같은 이름의 group은 명령이 달라도 합쳐져요. 명령이 실패하거나 JSON이 잘못되면 그 소스의 오류 줄을 보여 주고 다른 소스는 계속 그려요. 잘못된 행만 있는 경우에는 그 행을 제외해요.
 
@@ -184,6 +246,13 @@ python3 tools/tamagent-skin.py import-frames /path/to/my-character --skin my-pet
 
 ```json
 { "idle": [150, 150, 100, 250], "work": [150, 200] }
+```
+
+한 장짜리 스프라이트 시트도 바로 가져올 수 있어요. `--columns`·`--rows`로 칸을 나누고, `--cells`에 포즈마다 쓸 칸 번호(왼쪽 위부터 0, 행 우선)를 적어요. 같은 포즈를 여러 번 적으면 그 순서대로 애니메이션 프레임이 돼요. 칸 안에 여백이 많으면 `--trim`으로 그려진 부분만 잘라 32×32에 크게 담아요.
+
+```sh
+python3 tools/tamagent-skin.py import-sheet /path/to/sheet.png --skin my-pets --as a \
+  --columns 3 --rows 2 --cells "idle=0,work=1,idle=2,sleep=3,wait=4,alert=5" --trim --ms 450
 ```
 
 ### 3. 스킨과 매핑 설정

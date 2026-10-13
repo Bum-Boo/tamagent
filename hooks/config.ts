@@ -1,4 +1,6 @@
 import type { PluginOptions } from 'claude-code'
+import { singleLine } from './agents'
+import { Pet } from './reactions'
 
 export type Config = {
   sources: string[][]
@@ -6,6 +8,11 @@ export type Config = {
   skin: string
   characters: Record<string, string>
   language: string
+  danger?: RegExp
+  sportscaster: boolean
+  casters: string[]
+  voices: string
+  sleepMs: number
   errors: string[]
 }
 
@@ -53,5 +60,27 @@ export function parseConfig(options: PluginOptions): Config {
     errors.push('language: use auto, ko or en; using auto')
     language = 'auto'
   }
-  return { sources, refreshMs: Math.round(seconds * 1000), skin, characters, language, errors }
+  const danger = Pet.parseDanger(typeof options.danger === 'string' ? options.danger : '')
+  if (danger.error) errors.push(danger.error)
+  let sportscaster = typeof options.sportscaster === 'string' ? options.sportscaster : 'on'
+  if (!['on', 'off'].includes(sportscaster)) {
+    errors.push('sportscaster: use on or off; using on')
+    sportscaster = 'on'
+  }
+  const casters = (typeof options.casters === 'string' ? options.casters : '')
+    .split(',').map(one => singleLine(one)).slice(0, 6)
+  let voices = typeof options.voices === 'string' ? options.voices : 'default'
+  if (!safeName(voices)) {
+    errors.push('voices: use letters, digits, hyphens or underscores; using default')
+    voices = 'default'
+  }
+  let sleepMinutes = typeof options.sleepMinutes === 'number' ? options.sleepMinutes : 10
+  if (!Number.isFinite(sleepMinutes) || sleepMinutes < 1 || sleepMinutes > 1440) {
+    errors.push('sleepMinutes: use 1–1440 minutes; using 10')
+    sleepMinutes = 10
+  }
+  return {
+    sources, refreshMs: Math.round(seconds * 1000), skin, characters, language, errors,
+    danger: danger.pattern, sportscaster: sportscaster === 'on', casters, voices, sleepMs: Math.round(sleepMinutes * 60_000),
+  }
 }

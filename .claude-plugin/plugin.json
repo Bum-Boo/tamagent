@@ -1,7 +1,7 @@
 {
   "name": "tamagent",
-  "version": "0.1.0",
-  "description": "에이전트의 작업 상태를 작은 도트 캐릭터로 보여 주는 Claude Code mod",
+  "version": "0.2.0",
+  "description": "에이전트의 작업 상태를 작은 도트 캐릭터로 보여 주는 Claude Code mod. 펫이 반응하고, 마감은 보스가 되고, 중계석이 해설한다",
   "author": {
     "name": "Bum-Boo"
   },
@@ -30,7 +30,7 @@
     "characters": {
       "type": "string",
       "title": "Character mapping",
-      "description": "Comma-separated agent=character pairs, for example claude=a, codex=b. Optional role keys: main, subagent, external, queue, unknown.",
+      "description": "Comma-separated agent=character pairs, for example claude=a, codex=b. Optional role keys: main, subagent, external, queue, unknown, boss.",
       "default": ""
     },
     "language": {
@@ -43,6 +43,40 @@
         "en"
       ],
       "default": "auto"
+    },
+    "danger": {
+      "type": "string",
+      "title": "Extra danger pattern",
+      "description": "Regular expression added to the built-in dangerous-command list (rm -rf, git push --force, DROP TABLE, dd/mkfs, …). The pet only panics; nothing is blocked.",
+      "default": ""
+    },
+    "sportscaster": {
+      "type": "string",
+      "title": "Sportscaster band",
+      "description": "Play-by-play commentary above the prompt. /tama cast toggles it during a session.",
+      "options": [
+        "on",
+        "off"
+      ],
+      "default": "on"
+    },
+    "casters": {
+      "type": "string",
+      "title": "Commentator names",
+      "description": "Comma-separated commentator names, up to six, overriding the voice pack's names from the first. Leave a slot empty to keep that pack name.",
+      "default": ""
+    },
+    "sleepMinutes": {
+      "type": "number",
+      "title": "Sleep after (minutes)",
+      "description": "Minutes without tool calls or prompts before the pet falls asleep, 1–1440. Default: 10.",
+      "default": 10
+    },
+    "voices": {
+      "type": "string",
+      "title": "Voice pack",
+      "description": "Commentary voice pack name under ~/.local/share/tamagent/voices/<name>.json; default uses the built-in caster and color commentator. /tama voice <name> switches for the session.",
+      "default": "default"
     }
   }
 }

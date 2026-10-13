@@ -28,6 +28,7 @@
 - 主智能体在工具调用运行期间处于工作状态，其余时间休息。子智能体在 `running` 时工作，在 `pending`、`waiting` 或 `idle` 时休息，完成后就会消失。
 - **List** 切换为文字列表，**Characters** 切换回角色视图。
 - **Switch characters** 会在当前皮肤的角色之间轮换，**Default characters** 恢复为配置中的对应关系。这只是当前会话内的预览，不会写入设置。面板文字为英语或韩语（见 `language` 设置），中文环境下显示英语。
+- `/tama cast` 切换提示框上方的解说条。`/tama voice <语音包名>` 更换本次会话的解说声音（`default` 恢复默认）。
 - 外部智能体按 `group` 分组。角色视图中每个分区最多显示两行，想看全部请切换到列表。关闭面板后会停止轮询和动画。
 
 内置的角色分配：
@@ -40,6 +41,59 @@
 | 名称包含 `queue` 的分组（不区分大小写） | `cloud` | 桃色云朵 |
 | 智能体名称为空、`unknown` 或 `?` | `meteor` | 拖着尾巴的金色流星 |
 
+## 宠物的反应
+
+主角色会对会话里发生的事做出反应。它只负责展示，不会拦截或改写调用。
+
+| 事件 | 反应 | 持续 |
+| --- | --- | --- |
+| 工具调用以错误结束 | `alert` 姿势，标签显示 `Ouch, failed! <tool>` | 6 秒 |
+| 其他插件拒绝了调用 | `alert` 姿势，`Blocked <tool>` | 6 秒 |
+| 看起来危险的 Bash 命令 | `alert` 姿势，`Danger!`，弹一次提示 | 8 秒 |
+| 回合以回答结束 | `Done!` | 4 秒 |
+| 安静了 `sleepMinutes` 分钟 | `sleep` 姿势，`zZ` | 直到下一次提示或工具调用 |
+
+危险命令指 `rm -rf`、`git push --force`、`git reset --hard`、`DROP TABLE`、`dd if=`、`mkfs` 这类难以撤销的模式。可以用 `danger` 设置添加自己的正则表达式。调用仍会照常执行；想拦截请另外使用守卫类 mod。
+
+## 截止日期 Boss 战
+
+数据源的行里带有 `due` 时，这一行就是 Boss。剩余时间是它的血量，`hits` 每增加一次就是打了它一下。
+
+```json
+[
+  {"id": "paper", "label": "论文投稿", "detail": "修改摘要",
+   "due": "2026-12-01", "since": "2026-11-17", "hits": 12, "group": "截止日期"}
+]
+```
+
+| 字段 | 规则 |
+| --- | --- |
+| `id`、`label` | 必填 |
+| `due` | 必填。ISO 日期或日期时间，或毫秒数。只写日期表示当天 23:59:59（本地时间） |
+| `since` | 血量为 100% 的时刻。省略时为 `due` 前 14 天 |
+| `hits` | 大于等于 0 的整数。两次轮询之间增加时，`HIT!` 闪烁 3 秒并触发解说 |
+| `detail`、`group` | 可选。`group` 默认为 `Boss fight` |
+
+Boss 格子会带一行血量，例如 `██████░░░░ 62% · 8d 3h · 12 hits`。不足 24 小时时进入狂暴（`alert` 姿势，弹一次提示），过期后显示 `past due`。Boss 角色由 `characters` 的 `boss` 键决定，默认是 `meteor`。
+
+## 解说席
+
+提示框上方的解说条里有两个声音为会话解说：回合的第一个工具、同一工具的第 5、10、20、40 次调用、失败、危险命令、回合结束、子智能体登场、外部智能体进场和状态变化、Boss 受击与狂暴、宠物入睡和醒来。非紧急事件每 2.5 秒最多一行，且不会重复同一句话。用解说条上的 **Mute** 按钮或 `/tama cast` 开关。
+
+语音包可以更换说话风格。放在 `~/.local/share/tamagent/voices/<name>.json`，用 `voices` 设置或 `/tama voice <name>` 选择。
+
+```json
+{
+  "voices": ["主播", "嘉宾", "新人"],
+  "lines": {
+    "start": [[0, "{tool} 开启本回合。"], [2, "{tool}… 我也来试试！"]],
+    "hit": [[1, "{label} 被击中 {hits} 次！"]]
+  }
+}
+```
+
+`voices` 可以有 1 到 6 个名字，每一行是 `[声音编号, 文本]`。`{tool}`、`{count}`、`{seconds}`、`{tools}`、`{description}`、`{agent}`、`{detail}`、`{label}`、`{hits}` 会被替换成实际值。种类有 `start`、`burst`、`error`、`danger`、`denied`、`turn`、`spawn`、`enter`、`failed`、`waiting`、`hit`、`rage`、`past`、`sleep`、`wake`，缺少的种类使用内置台词。可以用喜欢的作品角色的口吻编写语音包，放在个人文件夹里。使用他人角色的语音包不要放进公开仓库。
+
 ## 配置
 
 可以在安装时设置，也可以在 Tamagent 的 `/config` 项中修改。修改配置后，引擎会重新加载 mod。在设置文件中，这些值位于 `pluginConfigs[plugin identifier].options` 下。使用 `--plugin-dir` 时，标识符为 `tamagent`（或 `tamagent@inline`）。
@@ -51,6 +105,11 @@
 | `skin` | 字符串 | `"default"` | 皮肤文件夹名；`default` 始终使用内置素材 |
 | `characters` | 字符串 | `""` | 用逗号分隔的 `agent=characterID` 对 |
 | `language` | 字符串 | `"auto"` | 面板语言。`auto` 会检查 `LC_ALL`、`LC_MESSAGES`、`LANG`：`ko*` 时显示韩语，否则显示英语。设为 `ko` 或 `en` 可固定语言 |
+| `danger` | 字符串 | `""` | 加入内置危险命令列表的正则表达式。宠物只会受惊，不会拦截任何东西 |
+| `sportscaster` | 字符串 | `"on"` | 提示框上方的解说条。`off` 隐藏，`/tama cast` 可打开 |
+| `casters` | 字符串 | `""` | 用逗号分隔的解说员名字，从第一个开始覆盖语音包里的名字 |
+| `voices` | 字符串 | `"default"` | 语音包名称，从 `~/.local/share/tamagent/voices/<name>.json` 读取 |
+| `sleepMinutes` | 数字 | `10` | 没有工具调用和提示的时间超过这个分钟数，宠物就会入睡，1–1440 |
 
 `options` 对象示例，路径请按自己的机器修改：
 
@@ -59,13 +118,15 @@
   "sources": "[[\"python3\",\"/path/to/tamagent/examples/mock-agents.py\"],[\"python3\",\"/path/to/tamagent/examples/process-agents.py\"]]",
   "refreshSeconds": 5,
   "skin": "default",
-  "characters": "claude=slime, codex=robot"
+  "characters": "claude=slime, codex=robot, boss=meteor",
+  "casters": "Caster, Color",
+  "sleepMinutes": 10
 }
 ```
 
 在 `sources` 配置输入框中直接填入 `[["python3","/path/to/agents.py"]]`。命令按 argv 直接执行，不经过 shell。包含空格的路径仍然算作一个参数。`~`、`$HOME`、管道和重定向都不会展开，请使用绝对路径或 PATH 中的可执行文件名。命令继承当前 Claude Code 会话的工作目录。面板打开期间命令会反复执行，所以请只配置可信的、只读取状态的脚本。
 
-映射按智能体名称匹配，不区分大小写：主智能体用 `claude`，子智能体用其类型（例如 `Explore`），外部条目用 JSON 里的 `agent`。`main`、`subagent`、`external`、`queue`、`unknown` 这几个类别键会作用于整个类别。按智能体名称设置的映射优先。使用自定义皮肤时，没有映射的智能体会用 manifest 中的第一个角色。如果角色 ID 不存在，会回退到该类别的内置角色。
+映射按智能体名称匹配，不区分大小写：主智能体用 `claude`，子智能体用其类型（例如 `Explore`），外部条目用 JSON 里的 `agent`。 如果智能体名称里带冒号，例如 `hermes:fern`，会依次按完整名称 → 冒号前的前缀（`hermes`）→ 角色查找，这样同一个数据源发来的每个个体都可以有自己的角色。`main`、`subagent`、`external`、`queue`、`unknown` 这几个类别键会作用于整个类别。按智能体名称设置的映射优先。使用自定义皮肤时，没有映射的智能体会用 manifest 中的第一个角色。如果角色 ID 不存在，会回退到该类别的内置角色。
 
 皮肤名和角色 ID 必须以 ASCII 字母或数字开头，只能包含字母、数字、`_` 或 `-`，最长 64 个字符。无效的配置会在面板中提示，有效的条目和默认值照常生效。
 
@@ -94,6 +155,7 @@
 | `detail` | 标签第二行；默认为空 |
 | `state` | 必填：`working`、`idle`、`stale`、`waiting` 或 `failed` |
 | `group` | 分区名称；省略或为空时归入默认的 **External** 分区 |
+| `due` | 存在时，这一行不是智能体，而是**截止日期 Boss**。见上文 Boss 战 |
 
 换行符和控制字符会被合并成一行。多余的字段会被忽略。ID 按命令划分命名空间，因此不同命令可以使用相同的 ID。同名分组会跨命令合并。某条命令失败或输出的 JSON 无效时，会显示一行错误，其他数据源照常显示。无效的行会被单独跳过。
 
@@ -184,6 +246,13 @@ python3 tools/tamagent-skin.py import-frames /path/to/my-character --skin my-pet
 
 ```json
 { "idle": [150, 150, 100, 250], "work": [150, 200] }
+```
+
+也可以直接导入一整张精灵图。用 `--columns` 和 `--rows` 切分格子，再在 `--cells` 里写出每个姿势用哪一格（从左上角 0 开始，按行编号）；同一姿势写多次就按顺序成为动画帧。格子里留白很多时，加 `--trim` 只裁出画了内容的部分，让角色在 32×32 里显示得更大。
+
+```sh
+python3 tools/tamagent-skin.py import-sheet /path/to/sheet.png --skin my-pets --as a \
+  --columns 3 --rows 2 --cells "idle=0,work=1,idle=2,sleep=3,wait=4,alert=5" --trim --ms 450
 ```
 
 ### 3. 配置皮肤和映射

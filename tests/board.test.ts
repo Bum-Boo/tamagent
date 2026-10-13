@@ -230,7 +230,7 @@ test('캐릭터 바꾸기와 기본 배정 복귀', async ($, on) => {
   expect(await imageSource(pane, 'me')).toEqual({ png: HD['slime-idle-0'] })
 })
 
-test('메인은 도구가 실행 중일 때만 working이고 실패한 호출도 idle로 돌아간다', async ($, on) => {
+test('메인은 도구가 실행 중일 때만 working이고 실패한 호출은 잠깐 아팠다가 idle로 돌아간다', async ($, on) => {
   const clock = host(on, { term: 'xterm-kitty' })
   on('tool.call', async () => {
     await clock.sleep(1000)
@@ -243,6 +243,9 @@ test('메인은 도구가 실행 중일 때만 working이고 실패한 호출도
   expect(await imageSource(pane, 'me')).toEqual({ png: HD['slime-work-0'] })
   await clock.advance(1000)
   await running
+  expect((await pane.find({ type: 'Image', key: 'me' }))?.props.alt).toBe('slime alert')
+  expect(await pane.find({ text: '앗, 실패! Bash' })).toBeDefined()
+  await clock.advance(10000)
   expect((await pane.find({ type: 'Image', key: 'me' }))?.props.alt).toBe('slime idle')
 })
 

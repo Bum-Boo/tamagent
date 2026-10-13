@@ -101,6 +101,36 @@ class ImportTests(unittest.TestCase):
         self.assertTrue(any(value >= 0 for value in frame['lo']))
         self.assertEqual(skin.dimensions(skin.SKINS / 'test' / frame['file']), (208, 208))
 
+    def test_sheet_import_slices_cells_trims_and_skips_empty(self):
+        # 3x2 sheet, 60px cells: cell 0/1/3/4/5 drawn (small square off-center), cell 2 empty
+        canvas = sprites.Canvas(180, 120)
+        for index in (0, 1, 3, 4, 5):
+            row, column = divmod(index, 3)
+            for y in range(10, 22):
+                for x in range(30, 42):
+                    canvas.pixels[row * 60 + y][column * 60 + x] = 0x336699 + index
+        sheet = self.root / 'sheet.png'
+        sheet.write_bytes(sprites.png(canvas))
+        cells = 'idle=0,work=1,idle=2,sleep=3,wait=4,alert=5'
+        self.assertEqual(self.invoke('import-sheet', str(sheet), '--skin', 'test', '--as', 's', '--columns', '3', '--rows', '2', '--cells', cells, '--ms', '300'), 0)
+        poses = self.manifest()['characters']['s']
+        self.assertEqual(len(poses['idle']), 1)  # empty cell 2 skipped
+        self.assertEqual({pose: len(frames) for pose, frames in poses.items()}, {'idle': 1, 'work': 1, 'sleep': 1, 'wait': 1, 'alert': 1})
+        padded = poses['work'][0]
+        self.assertEqual(padded['ms'], 300)
+        self.assertEqual(skin.dimensions(skin.SKINS / 'test' / padded['file']), (60, 60))
+        filled_padded = sum(1 for value in padded['lo'] if value >= 0)
+        # --trim crops to the drawn pixels, so the 12px square fills far more of the 32x32 raster
+        self.assertEqual(self.invoke('import-sheet', str(sheet), '--skin', 'test', '--as', 't', '--columns', '3', '--rows', '2', '--cells', 'work=1', '--trim', '--margin', '2'), 0)
+        trimmed = self.manifest()['characters']['t']['work'][0]
+        self.assertEqual(skin.dimensions(skin.SKINS / 'test' / trimmed['file']), (16, 16))
+        self.assertGreater(sum(1 for value in trimmed['lo'] if value >= 0), filled_padded * 4)
+        # 나쁜 입력: 안 나눠떨어지는 격자, 범위 밖 칸, 잘못된 포즈
+        self.assertEqual(self.invoke('import-sheet', str(sheet), '--skin', 'test', '--as', 'u', '--columns', '7', '--rows', '2', '--cells', 'idle=0'), 1)
+        self.assertEqual(self.invoke('import-sheet', str(sheet), '--skin', 'test', '--as', 'u', '--columns', '3', '--rows', '2', '--cells', 'idle=6'), 1)
+        self.assertEqual(self.invoke('import-sheet', str(sheet), '--skin', 'test', '--as', 'u', '--columns', '3', '--rows', '2', '--cells', 'dance=0'), 1)
+        self.assertNotIn('u', self.manifest()['characters'])
+
     def test_zip_and_url_adapter_import_the_same_pet(self):
         # Only the network transfer is mocked; real ZIP selection and ffmpeg run.
         with patch.object(skin, 'download', side_effect=lambda _url, dest: shutil.copyfile(self.zip, dest)):

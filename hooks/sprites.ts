@@ -12,7 +12,7 @@ export const LO_COLUMNS = LO_PIXELS
 export const LO_ROWS = LO_PIXELS / 2
 export const BUILTINS = ['slime', 'robot', 'mushroom', 'cloud', 'meteor'] as const
 const DEFAULTS: Record<AgentRole, string> = {
-  main: 'slime', subagent: 'robot', external: 'mushroom', queue: 'cloud', unknown: 'meteor',
+  main: 'slime', subagent: 'robot', external: 'mushroom', queue: 'cloud', unknown: 'meteor', boss: 'meteor',
 }
 const COUNTS: Record<Pose, number> = { work: 2, idle: 4, sleep: 2, wait: 2, alert: 2 }
 const POSES = Object.keys(COUNTS) as Pose[]
@@ -51,7 +51,10 @@ export function parseSkin(text: string, directory: string): Skin {
 export function lookOf(entry: AgentEntry, pose: Pose, mapping: Record<string, string>, skin: Skin | undefined, offset = 0): Look {
   const fallback = DEFAULTS[entry.role]
   const names = skin && Object.keys(skin.characters).length ? Object.keys(skin.characters) : [...BUILTINS]
-  const mapped = mapping[entry.agent.toLowerCase()] ?? mapping[entry.role]
+  // 에이전트 이름이 hermes:fern처럼 접두사를 가지면 정확한 이름 → 접두사 → 역할 순으로 찾는다
+  const agent = entry.agent.toLowerCase()
+  const prefix = agent.includes(':') ? agent.slice(0, agent.indexOf(':')) : undefined
+  const mapped = mapping[agent] ?? (prefix ? mapping[prefix] : undefined) ?? mapping[entry.role]
   const wanted = mapped ?? (skin ? names[0]! : fallback)
   const start = Math.max(0, names.indexOf(wanted))
   const character = offset ? names[(start + offset) % names.length]! : wanted

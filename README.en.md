@@ -29,6 +29,7 @@ For local development, run `claude --plugin-dir /path/to/tamagent`.
 - **List** switches to a text list. **Characters** switches back to characters.
 - **Switch characters** cycles through the current skin's characters. **Default characters** restores the configured mapping. This is a session preview; it does not write settings. The panel text is in English or Korean (see `language`).
 - External agents are grouped by `group`. Character view shows up to two rows per section; use the list to see everyone. Closing the panel stops polling and animation.
+- `/tama cast` toggles the commentary band above the prompt. `/tama voice <pack>` switches the commentary voices for this session (`default` restores them).
 
 Bundled assignments:
 
@@ -39,6 +40,59 @@ Bundled assignments:
 | External agent | `mushroom` | Purple mushroom |
 | Group containing `queue` (case insensitive) | `cloud` | Peach cloud |
 | Empty agent name, `unknown`, or `?` | `meteor` | Golden meteor with a trail |
+
+## Pet reactions
+
+The main character reacts to what happens in the session. It only shows things; it never blocks or rewrites a call.
+
+| Event | Reaction | Lasts |
+| --- | --- | --- |
+| A tool call ends in an error | `alert` pose, label `Ouch, failed! <tool>` | 6 s |
+| Another plugin denies a call | `alert` pose, `Blocked <tool>` | 6 s |
+| A dangerous-looking Bash command | `alert` pose, `Danger!`, one toast | 8 s |
+| The turn ends with an answer | `Done!` | 4 s |
+| Quiet for `sleepMinutes` | `sleep` pose, `zZ` | until the next prompt or tool call |
+
+Dangerous commands are hard-to-undo patterns such as `rm -rf`, `git push --force`, `git reset --hard`, `DROP TABLE`, `dd if=` and `mkfs`. Add your own with the `danger` regular expression. The call still runs; use a guard mod if you want to block it.
+
+## Boss fights
+
+A source row with `due` is a boss. Time left is its health, and every increase of `hits` is a blow.
+
+```json
+[
+  {"id": "paper", "label": "Paper submission", "detail": "Revise the abstract",
+   "due": "2026-12-01", "since": "2026-11-17", "hits": 12, "group": "Deadlines"}
+]
+```
+
+| Field | Rule |
+| --- | --- |
+| `id`, `label` | Required |
+| `due` | Required. ISO date or date-time, or milliseconds. A bare date means 23:59:59 local time |
+| `since` | When health was 100%. Defaults to 14 days before `due` |
+| `hits` | Integer ≥ 0. An increase between polls flashes `HIT!` for 3 s and calls commentary |
+| `detail`, `group` | Optional. `group` defaults to `Boss fight` |
+
+A boss slot carries a health line like `██████░░░░ 62% · 8d 3h · 12 hits`. Under 24 hours it rages (`alert` pose, one toast); past due it shows `past due`. Pick the boss character with the `boss` key of `characters`; the default is `meteor`.
+
+## Sportscaster
+
+Two voices commentate the session in a band above the prompt: the first tool of a turn, the same tool at 5, 10, 20 and 40 calls, failures, dangerous commands, turn endings, subagent spawns, external agents entering or changing state, boss hits and rages, and the pet falling asleep or waking up. Except for urgent events it says at most one line every 2.5 seconds and never repeats itself. Mute it with the band's **Mute** button or `/tama cast`.
+
+Voice packs change the speaking style. Put one at `~/.local/share/tamagent/voices/<name>.json` and pick it with the `voices` setting or `/tama voice <name>`.
+
+```json
+{
+  "voices": ["Caster", "Color", "Rookie"],
+  "lines": {
+    "start": [[0, "{tool} opens the turn."], [2, "{tool}… let me try too!"]],
+    "hit": [[1, "{hits} hits on {label}!"]]
+  }
+}
+```
+
+`voices` holds one to six names and each line is `[voice index, text]`. `{tool}`, `{count}`, `{seconds}`, `{tools}`, `{description}`, `{agent}`, `{detail}`, `{label}` and `{hits}` are filled in. Kinds are `start`, `burst`, `error`, `danger`, `denied`, `turn`, `spawn`, `enter`, `failed`, `waiting`, `hit`, `rage`, `past`, `sleep` and `wake`; missing kinds fall back to the built-in lines. Write a pack in the voice of characters you like and keep it in your own folder. Keep packs that use someone else's characters out of public repositories.
 
 ## Configuration
 
@@ -51,6 +105,11 @@ Set these during installation or in Tamagent's `/config` entries. The engine rel
 | `skin` | string | `"default"` | Skin folder name; `default` always uses bundled art |
 | `characters` | string | `""` | Comma-separated `agent=characterID` pairs |
 | `language` | string | `"auto"` | Panel language. `auto` checks `LC_ALL`, `LC_MESSAGES`, `LANG`: Korean for `ko*`, English otherwise. Set `ko` or `en` to pin it |
+| `danger` | string | `""` | Regular expression added to the built-in dangerous-command list. The pet only panics; nothing is blocked |
+| `sportscaster` | string | `"on"` | Commentary band above the prompt. `off` hides it; `/tama cast` turns it on |
+| `casters` | string | `""` | Comma-separated commentator names, overriding the voice pack's names from the first |
+| `voices` | string | `"default"` | Voice pack name, read from `~/.local/share/tamagent/voices/<name>.json` |
+| `sleepMinutes` | number | `10` | Minutes without tool calls or prompts before the pet falls asleep, 1–1440 |
 
 Example `options` object; change paths for your machine:
 
@@ -59,13 +118,15 @@ Example `options` object; change paths for your machine:
   "sources": "[[\"python3\",\"/path/to/tamagent/examples/mock-agents.py\"],[\"python3\",\"/path/to/tamagent/examples/process-agents.py\"]]",
   "refreshSeconds": 5,
   "skin": "default",
-  "characters": "claude=slime, codex=robot"
+  "characters": "claude=slime, codex=robot, boss=meteor",
+  "casters": "Caster, Color",
+  "sleepMinutes": 10
 }
 ```
 
 In the `sources` configuration input, enter `[["python3","/path/to/agents.py"]]` directly. Commands execute by argv without a shell. Paths containing spaces stay a single argument. `~`, `$HOME`, pipes, and redirects are not expanded. Use absolute paths or executable names on PATH. Commands inherit the current Claude Code session's working directory. They run repeatedly while the panel is open; configure trusted scripts that read state.
 
-Mappings match agent names case insensitively: `claude` for the main agent, the type (e.g. `Explore`) for subagents, and the JSON `agent` for external entries. Role keys `main`, `subagent`, `external`, `queue`, and `unknown` apply to a whole role. Agent-name mappings take precedence. Unmapped agents in a custom skin use its first manifest character. A missing character ID falls back to the bundled character for that role.
+Mappings match agent names case insensitively: `claude` for the main agent, the type (e.g. If an agent name has a colon, as in `hermes:fern`, the lookup tries the exact name, then the prefix before the colon (`hermes`), then the role, so one source can give each of its instances its own character. `Explore`) for subagents, and the JSON `agent` for external entries. Role keys `main`, `subagent`, `external`, `queue`, and `unknown` apply to a whole role. Agent-name mappings take precedence. Unmapped agents in a custom skin use its first manifest character. A missing character ID falls back to the bundled character for that role.
 
 Skin names and character IDs start with an ASCII letter or digit and contain letters, digits, `_`, or `-`, at most 64 characters. Invalid configuration is reported in the panel; valid entries and defaults continue working.
 
@@ -94,6 +155,7 @@ Each command must print **one JSON array** to stdout and exit. Send diagnostic l
 | `detail` | Second label line; defaults to empty |
 | `state` | Required: `working`, `idle`, `stale`, `waiting`, or `failed` |
 | `group` | Section name; omitted or empty puts the agent in the default **External** section |
+| `due` | When present the row is a **deadline boss**, not an agent. See Boss fights above |
 
 Newlines and control characters are normalized to one line. Extra fields are ignored. IDs are namespaced per command, so different commands can reuse an ID. Equal group names merge across commands. Failed commands or invalid JSON produce an error line while other sources remain visible. Invalid rows are skipped individually.
 
@@ -184,6 +246,13 @@ For per-frame timing, put pose arrays in the source folder's `timings.json`. Val
 
 ```json
 { "idle": [150, 150, 100, 250], "work": [150, 200] }
+```
+
+A single sprite sheet works too. Split it with `--columns` and `--rows`, then list in `--cells` which cell (row-major from 0 at the top left) each pose uses; repeat a pose to add animation frames in that order. If the cells have wide margins, `--trim` crops each one to its drawn pixels so the sprite fills the 32×32 raster.
+
+```sh
+python3 tools/tamagent-skin.py import-sheet /path/to/sheet.png --skin my-pets --as a \
+  --columns 3 --rows 2 --cells "idle=0,work=1,idle=2,sleep=3,wait=4,alert=5" --trim --ms 450
 ```
 
 ### 3. Configure the skin and mapping
