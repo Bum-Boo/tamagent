@@ -1,5 +1,6 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
+import { test } from './timing'
 import type { AgentInfo, On } from 'claude-code'
 import type { AgentEntry } from '../types'
 import { EXTERNAL_GROUP, mainAgent, parseExternal, poseOf, sections, subagents } from '../hooks/agents'

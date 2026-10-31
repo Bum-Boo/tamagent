@@ -1,5 +1,6 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
+import { test } from './timing'
 import type { On } from 'claude-code'
 import { Roster } from '../hooks/agents'
 import { Arena, Boss } from '../hooks/bosses'
