@@ -13,7 +13,10 @@ export const singleLine = (text: string) => text
   .replace(/[\x00-\x1f\x7f-\x9f]/g, ' ')
   .trim()
 
-export const errorText = (error: unknown) => singleLine(error instanceof Error ? error.message : String(error))
+// 엔진은 거절 사유 앞에 `tamagent: $.fs.read: `처럼 플러그인과 호출을 붙인다. 패널 한 줄에서
+// 뒤에 오는 원인과 대체 동작('using default voices')이 잘리지 않게 그 머리를 뗀다
+export const errorText = (error: unknown) =>
+  singleLine(error instanceof Error ? error.message : String(error)).replace(/^[\w-]+: \$\.[\w.]+: /, '')
 
 const POSES: Record<AgentState, Pose> = {
   working: 'work', idle: 'idle', stale: 'sleep', waiting: 'wait', failed: 'alert',

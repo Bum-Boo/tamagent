@@ -3,7 +3,7 @@ import type { Engine } from 'claude-code/testing'
 import { HOST_VERSION, test } from './kit'
 import type { AgentInfo, On } from 'claude-code'
 import type { AgentEntry } from '../types'
-import { EXTERNAL_GROUP, mainAgent, parseExternal, poseOf, sections, subagents } from '../hooks/agents'
+import { EXTERNAL_GROUP, errorText, mainAgent, parseExternal, poseOf, sections, subagents } from '../hooks/agents'
 import { resolveLanguage } from '../hooks/i18n'
 import { parseConfig } from '../hooks/config'
 import { HD } from '../hooks/characters'
@@ -340,6 +340,15 @@ test('설정과 데이터 파싱은 잘못된 입력을 격리하고 기본값�
   expect(parsed.entries.length).toBe(1)
   expect(parsed.errors.length).toBe(1)
   expect(sections([], parsed.entries)[1]?.title).toBe(EXTERNAL_GROUP)
+})
+
+test('오류 줄은 엔진이 붙인 플러그인·호출 머리를 떼고 원인과 대체 동작을 남긴다', () => {
+  expect(errorText(new Error('tamagent: $.fs.read: ENOENT: /users/tester/.local/share/tamagent/voices/gone.json')))
+    .toBe('ENOENT: /users/tester/.local/share/tamagent/voices/gone.json')
+  expect(errorText(new Error('tamagent: $.agent.list: agent registry offline'))).toBe('agent registry offline')
+  // 사용자가 쓴 문장 속 콜론은 그대로 둔다
+  expect(errorText(new Error('config.yml: permission denied'))).toBe('config.yml: permission denied')
+  expect(errorText('plain\nline')).toBe('plain line')
 })
 
 test('상태 다섯 개와 서브에이전트 상태를 포즈로 바꾼다', () => {
