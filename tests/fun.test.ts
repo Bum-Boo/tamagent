@@ -1,6 +1,6 @@
 import { expect, mock } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import { test } from './timing'
+import { HOST_VERSION, test } from './kit'
 import type { On } from 'claude-code'
 import { Roster } from '../hooks/agents'
 import { Arena, Boss } from '../hooks/bosses'
@@ -23,6 +23,7 @@ type HostOptions = { rows?: () => unknown[]; lang?: string; toasts?: string[]; t
 const host = (on: On, opts: HostOptions = {}) => {
   const clock = mock.clock(on, { now: NOW })
   mock.env(on, { HOME: '/users/tester', TERM: opts.term ?? 'xterm-256color', TERM_PROGRAM: '', LANG: opts.lang ?? 'ko_KR.UTF-8' })
+  on('session.version', () => ({ value: HOST_VERSION }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.toast', (_$, e) => { opts.toasts?.push(e.text); return { value: undefined } })
   on('agent.list', () => ({ value: [] }))

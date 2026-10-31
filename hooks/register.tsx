@@ -8,6 +8,8 @@ import { Sportscaster, parseVoicePack } from './caster'
 import type { Language } from './i18n'
 import { moreText, resolveLanguage, stringsOf, updatedText } from './i18n'
 import { parseConfig, safeName } from './config'
+import type { HostCheck } from './host'
+import { MIN_HOST, checkHost } from './host'
 import { Pet } from './reactions'
 import type { Look, Skin } from './sprites'
 import { HD_COLUMNS, HD_ROWS, LO_COLUMNS, LO_ROWS, frameAt, hdPicture, loCells, lookOf, parseSkin } from './sprites'
@@ -64,6 +66,11 @@ let starting: Promise<void> | undefined
 let pollingGeneration: number | undefined
 let animating = false
 let shown: Slot[] = []
+// 호스트 버전. 지원 범위 밖이면 패널·띠·반응을 모두 쉬고 /tama가 이유를 말한다
+let host: HostCheck | undefined
+let hostCheck: Promise<HostCheck> | undefined
+const isHostTooOld = () => host?.status === 'unsupported'
+const hostErrors = () => host?.warning ? [host.warning] : []
 let shownAsImages = false
 const drawnFrame = new Map<string, number>()
 // 세션의 등장인물. 펫은 반응, 경기장은 보스, 출석부는 외부 에이전트, 중계석은 말을 맡는다.
@@ -117,6 +124,12 @@ async function loadVoices($: EngineInterface, name: string) {
   voiceErrors = errors
   voiceName = name
   caster.setPack(pack)
+}
+
+async function ensureHost($: EngineInterface) {
+  hostCheck ??= $.session.version().then(info => checkHost(info), (error: unknown) => checkHost(undefined, errorText(error)))
+  host = await hostCheck
+  return host
 }
 
 async function initialize($: EngineInterface) {
@@ -184,7 +197,7 @@ async function poll($: EngineInterface, token: number) {
     const bosses = external.flatMap(result => result.bosses)
     const next: Board = {
       agents: local!.entries, external: entries, bosses: bosses.map(boss => boss.toJSON()), polledAt: now,
-      errors: [...config.errors, ...skinErrors, ...voiceErrors, ...local!.errors, ...external.flatMap(result => result.errors)],
+      errors: [...hostErrors(), ...config.errors, ...skinErrors, ...voiceErrors, ...local!.errors, ...external.flatMap(result => result.errors)],
     }
     await update($, board, () => next)
     // 경기 상황 중계: 새 선수, 보스 히트·분노, 잠든 펫
@@ -292,9 +305,18 @@ export const register: Register = (on, options) => {
   roster.reset()
   voicesLoaded = false
   voiceErrors = []
+  host = undefined
+  hostCheck = undefined
 
   on('session.start', async ($, e, next) => {
     await detectLanguage($).catch(() => undefined)
+    const checked = await ensureHost($)
+    if (checked.status === 'unsupported') {
+      // 명령은 등록해 둔다. /tama가 왜 안 열리는지 말해 준다
+      await $.command.register({ name: 'tama', description: stringsOf(language).command }).catch(() => undefined)
+      try { $.ui.toast(stringsOf(language).hostTooOld(checked.version, MIN_HOST)) } catch { /* 장식 */ }
+      return next(e)
+    }
     await update($, isCastOn, () => config.sportscaster)
     await loadVoices($, config.voices)
     await $.command.register({ name: 'tama', description: stringsOf(language).command })
@@ -305,8 +327,10 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'tama' }, async ($, e) => {
     await detectLanguage($).catch(() => undefined)
-    if (!voicesLoaded) await loadVoices($, config.voices)
     const text = stringsOf(language)
+    const checked = await ensureHost($)
+    if (checked.status === 'unsupported') return { text: text.hostTooOld(checked.version, MIN_HOST) }
+    if (!voicesLoaded) await loadVoices($, config.voices)
     const [verb, ...rest] = e.args.trim().split(/\s+/)
     if (verb?.toLowerCase() === 'voice') {
       const name = rest.join(' ').trim()
@@ -344,6 +368,7 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    if (isHostTooOld()) return next(e)
     const now = await $.clock.now()
     caster.newTurn()
     if (pet.touch(now)) await announce($, { kind: 'wake' }, now)
@@ -351,13 +376,14 @@ export const register: Register = (on, options) => {
   })
 
   on('agent.spawn', async ($, e, next) => {
+    if (isHostTooOld()) return next(e)
     const now = await $.clock.now()
     await announce($, { kind: 'spawn', description: singleLine(e.description) }, now)
     return next(e)
   })
 
   on('turn.complete', async ($, e, next) => {
-    if (e.agentId) return next(e)
+    if (e.agentId || isHostTooOld()) return next(e)
     const now = await $.clock.now()
     pet.touch(now)
     if (e.reason === 'error') await react($, 'error', 'turn', now)
@@ -367,7 +393,7 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
-    if (e.agentId) return next(e)
+    if (e.agentId || isHostTooOld()) return next(e)
     const now = await $.clock.now()
     const call: ToolCall = { id: e.tool_use_id, tool: e.tool, isDone: false }
     await update($, calls, list => [...list.filter(one => !one.isDone), ...list.filter(one => one.isDone).slice(-199), call])
@@ -398,7 +424,7 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next.called ? undefined as never : next(e))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey || !(await read($, isCastOn))) return next(e)
+    if (e.props.hasSurvey || isHostTooOld() || !(await read($, isCastOn))) return next(e)
     const lines = (await read($, cast)).slice(-2)
     if (!lines.length) return next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
@@ -424,6 +450,8 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elements = $.ui.resolve(e)
     const { Box, Button, Text } = elements
+    // 지난 세션에서 열어 둔 패널이 지원하지 않는 호스트에서 다시 그려질 때
+    if (isHostTooOld()) return <Text>{stringsOf(language).hostTooOld(host!.version, MIN_HOST)}</Text>
     const Raster = e.surface === 'terminal' && 'Raster' in elements ? elements.Raster : undefined
     const Image = e.surface === 'terminal' && 'Image' in elements ? elements.Image : undefined
     const useImages = Image !== undefined && await read($, hasImages)
@@ -461,7 +489,7 @@ export const register: Register = (on, options) => {
           onPress={() => update($, isFocus, value => !value)} />
       </Box>
     )
-    const errors = (current?.errors ?? [...config.errors, ...skinErrors, ...voiceErrors]).map((error, index) => (
+    const errors = (current?.errors ?? [...hostErrors(), ...config.errors, ...skinErrors, ...voiceErrors]).map((error, index) => (
       <Text key={`error-${index}`} dimColor>{cutCells(`! ${error}`, width - 1)}</Text>
     ))
     const footer = current === null ? <Text dimColor>{text.loading}</Text> : (

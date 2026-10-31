@@ -9,7 +9,9 @@
 
 ## 설치
 
-function hooks mod API를 지원하는 Claude Code가 필요해요. 이 저장소는 2.1.295의 API와 테스트 엔진을 기준으로 만들었어요. 터미널의 Claude Code 프롬프트에서 실행해요.
+Claude Code **2.1.295 이상**이 필요해요(function hooks mod API). 2.1.295부터 2.1.316까지 테스트했어요. 버전은 `claude --version`으로 확인해요. 더 낮은 버전에서는 `/tama`가 패널을 여는 대신 필요한 버전을 알려 주고, 2.1.316보다 새 버전에서는 패널은 열되 `host:`로 시작하는 안내 한 줄을 보여요. mod API가 얼리 액세스라 릴리스마다 바뀔 수 있기 때문이에요.
+
+터미널의 Claude Code 프롬프트에서 실행해요.
 
 ```text
 /plugin install tamagent --marketplace Bum-Boo/tamagent

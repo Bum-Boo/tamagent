@@ -9,7 +9,9 @@ Small pixel companions move while your agents work. Tamagent is a Claude Code mo
 
 ## Install
 
-Requires a Claude Code build supporting function hook mods. This repository targets the 2.1.295 API and test engine. Enter this in the prompt of a terminal Claude Code session:
+Requires Claude Code **2.1.295 or newer** (the function hook mod API); tested on 2.1.295 through 2.1.316. Check with `claude --version`. On an older build `/tama` names the version it needs instead of opening the panel. On a build newer than 2.1.316 the panel opens with one `host:` notice line, because the mod API is early access and can change between releases.
+
+Enter this in the prompt of a terminal Claude Code session:
 
 ```text
 /plugin install tamagent --marketplace Bum-Boo/tamagent

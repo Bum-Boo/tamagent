@@ -9,7 +9,9 @@
 
 ## 安装
 
-需要支持函数钩子 mod 的 Claude Code 版本。本仓库基于 2.1.295 版的 API 和测试引擎。在终端版 Claude Code 会话的输入框中输入：
+需要 Claude Code **2.1.295 或更高版本**（函数钩子 mod API），已在 2.1.295 至 2.1.316 上测试。用 `claude --version` 查看版本。在更旧的版本上，`/tama` 不会打开面板，而是说明所需的版本；在比 2.1.316 更新的版本上，面板照常打开，但会显示一行以 `host:` 开头的提示，因为 mod API 仍处于抢先体验阶段，可能随版本变化。
+
+在终端版 Claude Code 会话的输入框中输入：
 
 ```text
 /plugin install tamagent --marketplace Bum-Boo/tamagent

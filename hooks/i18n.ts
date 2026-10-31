@@ -36,6 +36,7 @@ const STRINGS = {
     focus: '하는 일만',
     showAll: '모두 보기',
     resting: (count: number) => `쉬는 중 ${count}`,
+    hostTooOld: (version: string, min: string) => `Tamagent는 Claude Code ${min} 이상에서 동작해요. 지금 버전은 ${version}이에요. claude update 로 올린 뒤 다시 시작해 주세요.`,
   },
   en: {
     me: 'Me (Claude)',
@@ -70,6 +71,7 @@ const STRINGS = {
     focus: 'Active only',
     showAll: 'Show all',
     resting: (count: number) => `${count} resting`,
+    hostTooOld: (version: string, min: string) => `Tamagent needs Claude Code ${min} or newer; this is ${version}. Run claude update and restart.`,
   },
 } as const
 

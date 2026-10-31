@@ -1,3 +1,4 @@
+// 두 테스트 파일이 같이 쓰는 테스트 도구: 시간 한도와 호스트 버전
 import { test as kitTest } from 'claude-code/testing'
 import type { TestRest } from 'claude-code/testing'
 
@@ -10,3 +11,6 @@ export function test(name: string, ...rest: TestRest) {
   const [options, body] = rest.length === 1 ? [{}, rest[0]] : rest
   kitTest(name, { timeoutMs: TEST_TIMEOUT_MS, ...options }, body)
 }
+
+// 테스트 호스트가 답하는 Claude Code 버전. 지원 범위(hooks/host.ts) 안의 릴리스
+export const HOST_VERSION = { version: '2.1.302', base: '2.1.302', builtAt: '2026-10-01T00:00:00Z' }

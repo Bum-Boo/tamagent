@@ -1,6 +1,6 @@
 import { expect, mock } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import { test } from './timing'
+import { HOST_VERSION, test } from './kit'
 import type { AgentInfo, On } from 'claude-code'
 import type { AgentEntry } from '../types'
 import { EXTERNAL_GROUP, mainAgent, parseExternal, poseOf, sections, subagents } from '../hooks/agents'
@@ -39,6 +39,7 @@ type HostOptions = {
 const host = (on: On, opts: HostOptions = {}) => {
   const clock = mock.clock(on, { now: NOW })
   mock.env(on, { HOME: '/users/tester', TERM: opts.term ?? 'xterm-256color', TERM_PROGRAM: opts.program ?? '', LANG: opts.lang ?? 'ko_KR.UTF-8' })
+  on('session.version', () => ({ value: HOST_VERSION }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('agent.list', () => { opts.onPoll?.(); return { value: opts.agents ?? AGENTS } })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
