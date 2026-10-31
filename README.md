@@ -325,4 +325,4 @@ claude plugin test .
 tsc -p . --noEmit
 ```
 
-TypeScript 선언은 지원하는 Claude Code가 개발 폴더를 로드할 때 `.claude-plugin/types/`에 생성해요. 설치된 TypeScript의 `tsc`를 쓰면 돼요. 원본 그림은 [tools/make_sprites.py](tools/make_sprites.py), 생성된 데이터는 [hooks/characters.ts](hooks/characters.ts)예요. HD/LO 시트와 개별 PNG는 `tools/preview/`에 생성하며 Git에 넣지 않아요.
+`tsc`에는 Claude Code가 이 폴더의 mod를 대화형 세션에서 로드할 때 `.claude-plugin/types/`에 만드는 TypeScript 선언이 필요해요. 새로 clone했다면 터미널에서 `claude --plugin-dir .`를 한 번 실행해 `/tama`로 패널을 열고 종료해요. 그 전에는 `tsc`가 `TS5083: Cannot read file '.claude-plugin/types/tsconfig.json'`에서 멈춰요. `claude -p`로는 생기지 않아요. TypeScript는 5.4 이상을 써요. `ffmpeg`와 `ffprobe`가 PATH에 없으면 Python 가져오기 테스트는 건너뛰고도 OK로 끝나요. 원본 그림은 [tools/make_sprites.py](tools/make_sprites.py), 생성된 데이터는 [hooks/characters.ts](hooks/characters.ts)예요. HD/LO 시트와 개별 PNG는 `tools/preview/`에 생성하며 Git에 넣지 않아요.

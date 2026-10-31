@@ -326,4 +326,4 @@ claude plugin test .
 tsc -p . --noEmit
 ```
 
-対応している Claude Code のビルドでは、開発用フォルダを読み込むと `.claude-plugin/types/` に TypeScript の型宣言が生成されます。`tsc` は、インストール済みの TypeScript のものを使ってください。オリジナルのアートは [tools/make_sprites.py](tools/make_sprites.py) で定義されており、[hooks/characters.ts](hooks/characters.ts) は生成されたファイルです。HD/LO のシートと個別の PNG は `tools/preview/` の下に生成され、Git の管理対象外です。
+`tsc` には、対話型セッションの Claude Code がこのフォルダの mod を読み込むときに `.claude-plugin/types/` へ書き出す TypeScript の型宣言が必要です。clone したばかりなら、ターミナルで `claude --plugin-dir .` を一度起動し、`/tama` でパネルを開いてから終了してください。それまでは `tsc` が `TS5083: Cannot read file '.claude-plugin/types/tsconfig.json'` で止まります。`claude -p` では書き出されません。TypeScript は 5.4 以降を使ってください。`ffmpeg` と `ffprobe` が PATH にない場合、Python の取り込みテストはスキップされ、結果は OK になります。オリジナルのアートは [tools/make_sprites.py](tools/make_sprites.py) で定義されており、[hooks/characters.ts](hooks/characters.ts) は生成されたファイルです。HD/LO のシートと個別の PNG は `tools/preview/` の下に生成され、Git の管理対象外です。

@@ -326,4 +326,4 @@ claude plugin test .
 tsc -p . --noEmit
 ```
 
-受支持的 Claude Code 版本在加载开发文件夹时，会在 `.claude-plugin/types/` 中生成 TypeScript 类型声明。请使用自己安装的 TypeScript 自带的 `tsc`。原创美术素材定义在 [tools/make_sprites.py](tools/make_sprites.py) 中；[hooks/characters.ts](hooks/characters.ts) 是生成出来的文件。HD/LO 精灵表和单独的 PNG 会生成到 `tools/preview/` 下，并且会被 Git 忽略。
+`tsc` 需要 Claude Code 在交互式会话中从此文件夹加载 mod 时写入 `.claude-plugin/types/` 的 TypeScript 类型声明。刚 clone 的仓库，请先在终端运行一次 `claude --plugin-dir .`，用 `/tama` 打开面板后退出；在此之前 `tsc` 会停在 `TS5083: Cannot read file '.claude-plugin/types/tsconfig.json'`。`claude -p` 不会写入这些声明。请使用 TypeScript 5.4 或更高版本。PATH 中没有 `ffmpeg` 和 `ffprobe` 时，Python 导入测试会被跳过，结果仍显示 OK。原创美术素材定义在 [tools/make_sprites.py](tools/make_sprites.py) 中；[hooks/characters.ts](hooks/characters.ts) 是生成出来的文件。HD/LO 精灵表和单独的 PNG 会生成到 `tools/preview/` 下，并且会被 Git 忽略。

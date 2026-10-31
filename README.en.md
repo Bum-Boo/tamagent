@@ -326,4 +326,4 @@ claude plugin test .
 tsc -p . --noEmit
 ```
 
-A supported Claude Code build generates TypeScript declarations in `.claude-plugin/types/` when loading a development folder. Use your installed TypeScript's `tsc`. Original art is defined in [tools/make_sprites.py](tools/make_sprites.py); [hooks/characters.ts](hooks/characters.ts) is generated. HD/LO sheets and individual PNGs are generated under `tools/preview/` and ignored by Git.
+`tsc` needs the TypeScript declarations Claude Code writes to `.claude-plugin/types/` when an interactive session loads the mod from this folder. On a fresh clone, run `claude --plugin-dir .` once in a terminal, open the panel with `/tama`, and quit; until then `tsc` stops at `TS5083: Cannot read file '.claude-plugin/types/tsconfig.json'`. `claude -p` does not write them. Use TypeScript 5.4 or newer. Without `ffmpeg` and `ffprobe` on PATH the Python import tests are skipped and the run still ends with OK. Original art is defined in [tools/make_sprites.py](tools/make_sprites.py); [hooks/characters.ts](hooks/characters.ts) is generated. HD/LO sheets and individual PNGs are generated under `tools/preview/` and ignored by Git.
