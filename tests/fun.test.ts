@@ -50,6 +50,8 @@ const PANE_PROPS = {
 const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} } as const
 const OPEN = { command: 'tama', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 160 } } as const
 const SOURCE = { options: { sources: '[["boss-source"]]' } }
+// 사용자가 Enter로 보낸 프롬프트. 엔진 타입의 PromptSubmitInput은 wait와 origin을 요구한다
+const TYPED = { wait: false, origin: { kind: 'composer' } } as const
 const mountPane = ($: Engine) =>
   $.ui.mount({ plugin: 'tamagent', surface: 'terminal', component: 'Pane', props: PANE_PROPS, requestId: 'tamagent-panel' })
 const mountBand = ($: Engine) =>
@@ -157,7 +159,7 @@ test('조용하면 잠들고 프롬프트가 오면 깨며 턴이 끝나면 중�
   expect(await alt(pane, 'me')).toBe('slime sleep')
   expect(await pane.find({ text: /zZ/ })).toBeDefined()
   expect(await band.find({ text: /잠들었습니다|꿈나라/ })).toBeDefined()
-  await $.prompt.submit({ text: '계속' })
+  await $.prompt.submit({ text: '계속', ...TYPED })
   expect(await band.find({ text: '펫 기상! 경기 재개!' })).toBeDefined()
   await clock.advance(5000)
   expect(await alt(pane, 'me')).toBe('slime idle')
@@ -172,12 +174,12 @@ test('영어 로케일이면 중계와 반응 문구도 영어다', SOURCE, asyn
   await $.command.run(OPEN)
   const pane = await mountPane($)
   const band = await mountBand($)
-  await $.tool.call({ tool: 'Grep', pattern: 'x' })
-  expect(await pane.find({ text: 'Ouch, failed! Grep' })).toBeDefined()
+  await $.tool.call({ tool: 'Write', file_path: '/a', content: 'x' })
+  expect(await pane.find({ text: 'Ouch, failed! Write' })).toBeDefined()
   expect(await pane.find({ text: 'Boss fight (1)' })).toBeDefined()
   expect(await pane.find({ text: /2d 0h · 3 hits/ })).toBeDefined()
   expect(await band.find({ text: 'Color' })).toBeDefined()
-  expect(await band.find({ text: /Grep failed/ })).toBeDefined()
+  expect(await band.find({ text: /Write failed/ })).toBeDefined()
 })
 
 test('설정: 잘못된 danger 정규식과 sportscaster 값은 오류로 남고 기본값을 쓴다', { options: { danger: '([', sportscaster: 'loud', sleepMinutes: 0 } }, async ($, on) => {
@@ -283,9 +285,9 @@ test('목소리 팩: 설정으로 읽고 /tama voice 로 바꾸며, 빠진 종�
   expect((await $.command.run({ ...OPEN, args: 'voice ../etc' })).text).toBe('/tama voice <팩 이름> 또는 /tama voice default')
   expect((await $.command.run({ ...OPEN, args: 'voice test' })).text).toBe('목소리 팩 test: 하치와레, 우사기 선배, 치이카와')
   await clock.advance(3000) // 중계 간격 2.5초를 넘긴다
-  await $.prompt.submit({ text: '다음 턴' })
-  await $.tool.call({ tool: 'Grep', pattern: 'x' })
-  expect(await band.find({ text: /Grep로 시작이네! 어떻게든 되겠지~!|Grep… 가, 간다…!/ })).toBeDefined()
+  await $.prompt.submit({ text: '다음 턴', ...TYPED })
+  await $.tool.call({ tool: 'Write', file_path: '/b', content: 'x' })
+  expect(await band.find({ text: /Write로 시작이네! 어떻게든 되겠지~!|Write… 가, 간다…!/ })).toBeDefined()
 })
 
 test('parseVoicePack: 잘못된 줄은 버리고 쓸 줄이 하나도 없으면 거부한다', () => {
